@@ -13,7 +13,11 @@
       "Bash(C:/Users/mjtan/desktop/openagi/venv/Scripts/pip.exe install:*)",
       "Bash(C:/Users/mjtan/desktop/openagi/venv/Scripts/pip.exe list:*)",
       "Bash(./venv/Scripts/python.exe -c \"from llm_gateway import check_providers; print\\(check_providers\\(\\)\\)\")",
-      "Bash(./venv/Scripts/python.exe kernel.py cli)"
+      "Bash(./venv/Scripts/python.exe kernel.py cli)",
+      "Bash(git rm:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)"
     ]
   }
 }

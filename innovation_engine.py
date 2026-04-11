@@ -76,8 +76,19 @@ Return JSON:
 
     def generate_novel_solutions(self, problem: str, constraints: list = None, n: int = 5) -> list:
         """Full pipeline: axioms + analogies → synthesize N novel solutions."""
-        axioms = self.decompose_to_axioms(problem)
-        analogies = self.analogical_transfer(problem)
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        # Run axiom decomposition and analogical transfer IN PARALLEL
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            axiom_future = executor.submit(self.decompose_to_axioms, problem)
+            analogy_future = executor.submit(self.analogical_transfer, problem)
+            try:
+                axioms = axiom_future.result(timeout=45)
+            except:
+                axioms = {"axioms": []}
+            try:
+                analogies = analogy_future.result(timeout=45)
+            except:
+                analogies = []
 
         analogy_summary = "\n".join(
             f"- From {a.get('domain','?')}: {a.get('transfer_to_problem','')}"
@@ -127,17 +138,25 @@ Return only the improved solution."""
 
     def register_as_tool(self, registry):
         def innovate(params: dict) -> dict:
-            problem = params.get("problem", "")
+            problem = params.get("problem", "") or params.get("prompt", "")  # Handle both param names
             mode = params.get("mode", "full")
 
-            if mode == "axioms":
-                return self.decompose_to_axioms(problem)
-            elif mode == "analogies":
-                return {"analogies": self.analogical_transfer(problem)}
-            else:
-                solutions = self.generate_novel_solutions(problem)
-                top = solutions[0] if solutions else {}
-                return {"solutions": solutions, "top_solution": top, "problem": problem}
+            try:
+                if mode == "axioms":
+                    return {"success": True, "data": self.decompose_to_axioms(problem)}
+                elif mode == "analogies":
+                    return {"success": True, "data": {"analogies": self.analogical_transfer(problem)}}
+                else:
+                    solutions = self.generate_novel_solutions(problem)
+                    top = solutions[0] if solutions else {}
+                    return {
+                        "success": True,
+                        "data": {"solutions": solutions, "top_solution": top, "problem": problem},
+                        "solution_count": len(solutions)
+                    }
+            except Exception as e:
+                log.error(f"Innovation failed: {e}")
+                return {"success": False, "error": str(e)}
 
         registry.register(
             name="innovate",

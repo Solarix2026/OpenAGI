@@ -211,8 +211,13 @@ class Kernel:
 
     def _run_action(self, user_input: str, intent: dict) -> str:
         """Execute tool, then generate NVIDIA response with result context."""
+        import concurrent.futures
         action = intent.get("action")
         params = intent.get("parameters", {})
+
+        # Special: innovate tool needs longer timeout
+        if action == "innovate":
+            return self._run_innovate_with_timeout(user_input, params)
 
         # Special: world_events → WorldMonitor briefing
         if action == "world_events" and self.worldmonitor:
@@ -244,6 +249,55 @@ class Kernel:
         response = self._generate_response(user_input, self.history[-6:], full_ctx)
         self._update_history(user_input, response)
         return response
+
+    def _run_innovate_with_timeout(self, user_input: str, params: dict) -> str:
+        """Run innovate tool with timeout and progress updates."""
+        import concurrent.futures
+        from llm_gateway import send_telegram_alert
+
+        # Send progress update for Telegram
+        send_telegram_alert("🧠 Starting innovation process...")
+
+        def run_innovate():
+            result = self.executor.execute({"action": "innovate", "parameters": params})
+            return result
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_innovate)
+                # 90 second timeout for innovate tool
+                result = future.result(timeout=90)
+
+            if not result.get("success"):
+                error = result.get("error", "Unknown error")
+                return f"Innovation failed: {error}"
+
+            # Format the solutions
+            data = result.get("data", {})
+            solutions = data.get("solutions", [])
+            if not solutions:
+                return "No solutions generated."
+
+            # Build concise response
+            lines = ["🚀 **Innovation Results**", ""]
+            lines.append(f"**Problem:** {data.get('problem', user_input)}")
+            lines.append(f"**Solutions found:** {len(solutions)}\n")
+
+            for i, sol in enumerate(solutions[:3], 1):
+                lines.append(f"**{i}. {sol.get('solution', 'Solution')}**")
+                lines.append(f"   Mechanism: {sol.get('mechanism', 'N/A')}")
+                lines.append(f"   Novelty: {sol.get('novelty_score', 0):.0%} | Feasibility: {sol.get('feasibility', 0):.0%}")
+                lines.append(f"   Why non-obvious: {sol.get('why_non_obvious', 'Innovative approach')}")
+                lines.append("")
+
+            return "\n".join(lines)
+
+        except concurrent.futures.TimeoutError:
+            log.error("Innovate timed out after 90s")
+            return "⏱️ Innovation timed out. The problem was too complex. Try a more specific prompt."
+        except Exception as e:
+            log.error(f"Innovate error: {e}")
+            return f"❌ Error during innovation: {str(e)[:200]}"
 
     def _generate_response(self, user_input: str, history: list, context: str = None) -> str:
         """All prose comes from NVIDIA. Groq never generates responses."""
@@ -320,6 +374,7 @@ class Kernel:
 
     def run_telegram(self):
         """Telegram bot mode."""
+        import threading
         from llm_gateway import send_telegram_alert, get_telegram_updates
         log.info("📱 Telegram mode started")
         send_telegram_alert("✅ OpenAGI online. Send me a message.")
@@ -334,7 +389,12 @@ class Kernel:
                     text = msg.get("text", "").strip()
                     if text:
                         log.info(f"[TG] Received: {text[:60]}")
-                        send_telegram_alert("⚡ Processing...")
+                        # Check if innovate tool might be invoked
+                        is_innovate = "innovate" in text.lower() or "invent" in text.lower()
+                        if is_innovate:
+                            send_telegram_alert("⚡ Innovation in progress... (this may take 30-60s)")
+                        else:
+                            send_telegram_alert("⚡ Processing...")
                         response = self.process(text)
                         send_telegram_alert(response[:4000])
             except KeyboardInterrupt:
