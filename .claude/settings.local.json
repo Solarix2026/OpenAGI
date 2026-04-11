@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/mjtan/Desktop/OpenAGI_V2/**)",
+      "Bash(python -m py_compile llm_gateway.py)",
+      "Bash(python -m py_compile memory_core.py)",
+      "Bash(python -m py_compile user_context.py)",
+      "Bash(python -m py_compile tool_registry.py)",
+      "Bash(python -m py_compile tool_executor.py)",
+      "Bash(python -m py_compile semantic_engine.py)",
+      "Bash(python -m venv venv)",
+      "Bash(./venv/Scripts/pip install:*)",
+      "Bash(C:/Users/mjtan/desktop/openagi/venv/Scripts/pip.exe install:*)",
+      "Bash(C:/Users/mjtan/desktop/openagi/venv/Scripts/pip.exe list:*)",
+      "Bash(./venv/Scripts/python.exe -c \"from llm_gateway import check_providers; print\\(check_providers\\(\\)\\)\")",
+      "Bash(./venv/Scripts/python.exe kernel.py cli)"
+    ]
+  }
+}
