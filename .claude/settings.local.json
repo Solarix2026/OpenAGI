@@ -29,7 +29,12 @@
       "Bash(find . -name \"*.py\" -not -path \"./venv/*\" -not -path \"./__pycache__/*\" -exec python -m py_compile {} \\\\; -print)",
       "Bash(find . -name \"*.py\" -not -path \"./venv/*\" -not -path \"./__pycache__/*\" -exec wc -l {} \\\\;)",
       "Bash(git reset:*)",
-      "Read(//c/Users/mjtan/AppData/Local/Temp/claude/C--Users-mjtan-desktop-openagi/3f71e304-1cb1-4ac7-97df-0839bc2a8d55/tasks/**)"
+      "Read(//c/Users/mjtan/AppData/Local/Temp/claude/C--Users-mjtan-desktop-openagi/3f71e304-1cb1-4ac7-97df-0839bc2a8d55/tasks/**)",
+      "Bash(pip install:*)",
+      "Bash(where python:*)",
+      "Bash(ls -la venv/Scripts/activate*)",
+      "Bash(venv\\\\Scripts\\\\python.exe -c \"import fastapi; print\\('fastapi OK'\\)\")",
+      "Bash(ls venv/Scripts/*.exe)"
     ]
   }
 }

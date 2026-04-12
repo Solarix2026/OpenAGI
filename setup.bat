@@ -31,7 +31,7 @@ if not exist workspace mkdir workspace
 
 echo.
 echo Running health check...
-python -c "from llm_gateway import check_providers; print(check_providers())"
+python -c "from core.llm_gateway import check_providers; print(check_providers())"
 
 echo.
 echo ============================================

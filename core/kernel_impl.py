@@ -654,9 +654,11 @@ class Kernel:
                 sys.path.insert(0, str(project_root))
             from interfaces.webui_server import WebUIServer
             self.webui = WebUIServer(self)
-            self.webui.start()
+            self.webui.start()  # This blocks on uvicorn.run()
         except ImportError as e:
             log.error(f"webui_server import failed: {e}")
+            log.info("Install dependencies: pip install fastapi uvicorn qrcode[pil]")
+            raise  # Re-raise so the error is visible
 
     def run_cli(self):
         """Interactive CLI mode."""

@@ -92,7 +92,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e8
 <button class="qbtn" onclick="send('list goals')">🎯 Goals</button>
 <button class="qbtn" onclick="send('what is happening in the world')">🌍 World</button>
 <button class="qbtn" onclick="send('evolve')">🧬 Evolve</button>
-<button class="qbtn" onclick="openSkills()">🧩 Skills</button>
+<button class=\"qbtn\" onclick=\"openSkills()\">🧩 Skills</button>\n<button class=\"qbtn\" id=\"mutebtn\" onclick=\"toggleMute()\">🔊 TTS On</button>
 </div>
 <div id="inputbar">
 <button id="voicebtn" onclick="toggleVoice()">🎤</button>
@@ -116,7 +116,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e8
 <script>
 const msgs = document.getElementById('messages');
 const statusEl = document.getElementById('status');
-let ws = null, isListening = false, recognizer = null;
+let ws = null, isListening = false, recognizer = null, ttsMuted = false;
 
 function connect() {
     ws = new WebSocket('ws://' + location.host + '/ws');
