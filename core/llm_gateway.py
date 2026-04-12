@@ -62,11 +62,12 @@ def call_groq_router(messages: list, max_tokens=250) -> str:
         raise
 
 
-def call_nvidia(messages: list, max_tokens=1200, temperature=0.7, fast=False) -> str:
+def call_nvidia(messages: list, max_tokens=1200, temperature=0.7, fast=False, stream_callback=None) -> str:
     """
     PRIMARY BRAIN. All responses, reasoning, generation go here.
     Uses Kimi k2.5 from NVIDIA NIM.
     fast=True → use smaller/faster model for low-stakes calls.
+    stream_callback → function(chunk) for streaming output (Web UI only).
     """
     # Check if NVIDIA key exists
     if not os.getenv("NVIDIA_API_KEY"):
@@ -75,13 +76,30 @@ def call_nvidia(messages: list, max_tokens=1200, temperature=0.7, fast=False) ->
 
     model = NVIDIA_FAST_MODEL if fast else NVIDIA_MAIN_MODEL
     try:
-        resp = _get_nvidia().chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        return resp.choices[0].message.content.strip()
+        # Use streaming if callback provided
+        if stream_callback:
+            resp = _get_nvidia().chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True,
+            )
+            full_text = ""
+            for chunk in resp:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    text = chunk.choices[0].delta.content
+                    full_text += text
+                    stream_callback(text)
+            return full_text.strip()
+        else:
+            resp = _get_nvidia().chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return resp.choices[0].message.content.strip()
     except Exception as e:
         log.warning(f"NVIDIA/Kimi failed ({e}), falling back to Groq 70B")
         return call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
@@ -203,3 +221,32 @@ def check_providers() -> dict:
         status["nvidia"] = f"FAIL: {e}"
 
     return status
+
+
+def call_nvidia_streaming(messages: list, max_tokens=1200, temperature=0.7):
+    """Generator that yields text chunks for streaming."""
+    import logging
+    log = logging.getLogger("LLMGateway")
+    
+    if not os.getenv("NVIDIA_API_KEY"):
+        yield call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
+        return
+
+    model = NVIDIA_MAIN_MODEL
+    try:
+        client = _get_nvidia()
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+        )
+        for chunk in resp:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+    except Exception as e:
+        log.warning(f"NVIDIA streaming failed ({e}), using fallback")
+        full = call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
+        for i in range(0, len(full), 20):
+            yield full[i:i+20]

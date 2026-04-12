@@ -477,8 +477,9 @@ class Kernel:
             log.error(f"Innovate error: {e}")
             return f"❌ Error during innovation: {str(e)[:200]}"
 
-    def _generate_response(self, user_input: str, history: list, context: str = None) -> str:
-        """All prose comes from NVIDIA. Groq never generates responses."""
+    def _generate_response(self, user_input: str, history: list, context: str = None, stream_callback=None) -> str:
+        """All prose comes from NVIDIA. Groq never generates responses.
+        If stream_callback provided, calls it with each chunk for Web UI streaming."""
         system = SYSTEM_PROMPT
 
         if context:
@@ -495,24 +496,52 @@ class Kernel:
         messages += history
         messages.append({"role": "user", "content": user_input})
 
-        # Call NVIDIA with timeout protection
-        import concurrent.futures
-        try:
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(call_nvidia, messages, max_tokens=800)
-                response = future.result(timeout=60)
-        except concurrent.futures.TimeoutError:
-            log.error("NVIDIA timeout after 60s")
-            response = "抱歉，系统响应超时。请重试。"
-        except Exception as e:
-            log.error(f"NVIDIA call failed: {e}")
-            response = f"系统错误: {str(e)[:200]}"
+        # Stream callback prevents long waits in Web UI
+        response = ""
+        import time
+        start = time.time()
+
+        if stream_callback:
+            # Streaming mode for Web UI - chunks sent immediately
+            try:
+                for chunk in call_nvidia_streaming(messages, max_tokens=800, temperature=0.6):
+                    response += chunk
+                    stream_callback(chunk)
+                    if time.time() - start > 120:
+                        return response + "\n\n[Truncated: response too long]"
+            except Exception as e:
+                log.error(f"Streaming generation failed: {e}")
+                if not response:
+                    response = f"系统错误: {str(e)[:200]}"
+        else:
+            # Non-streaming mode with timeout protection
+            import concurrent.futures
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(call_nvidia, messages, max_tokens=800, temperature=0.6)
+                    while not future.done():
+                        elapsed = time.time() - start
+                        if elapsed > 5 and elapsed < 10:
+                            log.info("[NVIDIA] Still thinking...")
+                        if elapsed > 120:
+                            break
+                        time.sleep(0.5)
+                    if future.done():
+                        response = future.result(timeout=5)
+                    else:
+                        raise concurrent.futures.TimeoutError()
+            except concurrent.futures.TimeoutError:
+                log.error("NVIDIA timeout after 120s")
+                response = "抱歉，这个问题比较复杂，处理时间超出了预期。请尝试一个更具体的问题。"
+            except Exception as e:
+                log.error(f"NVIDIA call failed: {e}")
+                response = f"系统错误: {str(e)[:200]}"
 
         self._update_history(user_input, response)
         self.memory.log_event("assistant_response", response[:500], importance=0.4)
 
-        # TTS in background thread to avoid blocking Telegram
-        if self.voice:
+        # TTS in background thread (skip if streaming - Web UI handles its own TTS)
+        if self.voice and not stream_callback:
             def speak_async(text):
                 try:
                     self.voice.speak(text)
