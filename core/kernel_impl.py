@@ -366,12 +366,25 @@ class Kernel:
             self.memory.update_meta_knowledge("pending_clarification", {})
             log.info(f"[CLARIFY] Merged input: {user_input[:80]}")
 
-        # ── 2. Intent classification (Groq router) ──────────────────
-        intent = self.semantic.classify_intent(user_input)
+        # ── 2. Intent classification + context fetch (PARALLEL) ─────
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            classify_future = pool.submit(self.semantic.classify_intent, user_input)
+            ctx_future = pool.submit(
+                self.user_ctx.build_context_string if self.user_ctx else lambda: ""
+            )
+            intent = classify_future.result(timeout=5)
+            ctx_str = ctx_future.result(timeout=3) if self.user_ctx else ""
         log.info(f"[INTENT] {intent}")
 
-        # ── 4. Depth analysis for conversation + complex actions ─────
-        if intent.get("intent") == "conversation" and len(user_input) > 15:
+        # ── 3. Depth analysis (skip for short/simple inputs) ─────────
+        # Skip for: action intents, short inputs (< 6 words), greetings
+        should_analyze_depth = (
+            intent.get("intent") == "conversation"
+            and len(user_input.split()) > 6
+            and not any(w in user_input.lower() for w in ["hi", "hello", "hey", "ok", "ok", "yes", "no", "thanks", "好", "谢", "嗯", "你好"])
+        )
+        if should_analyze_depth:
             needs_clarify, question = self.semantic.should_clarify(user_input)
             if needs_clarify and question:
                 self.memory.update_meta_knowledge(
@@ -381,44 +394,55 @@ class Kernel:
                 self.memory.log_event("clarification_request", question, importance=0.5)
                 return question
 
-        # ── 5. Execute action or generate conversation response ──────
+        # ── 4. Execute action or generate conversation response ─────
         if intent.get("intent") == "action":
-            return self._run_action(user_input, intent)
+            return self._run_action(user_input, intent, ctx_str)
         else:
-            return self._generate_response(user_input, self.history[-MAX_HISTORY_TURNS*2:], None)
+            return self._generate_response(user_input, self.history[-MAX_HISTORY_TURNS*2:], ctx_str)
 
-    def _run_action(self, user_input: str, intent: dict) -> str:
-        """Execute tool, then generate NVIDIA response with result context."""
+    def _run_action(self, user_input: str, intent: dict, ctx_str: str = "") -> str:
+        """Execute tool, then generate NVIDIA response with result context.
+        NO special branches - all tools handled uniformly."""
         import concurrent.futures
         action = intent.get("action")
         params = intent.get("parameters", {})
 
-        # Special: innovate tool needs longer timeout
-        if action == "innovate":
-            return self._run_innovate_with_timeout(user_input, params)
+        # Timeout lookup (no special if-else, just config)
+        TIMEOUTS = {
+            "innovate": 90,
+            "evolve": 90,
+            "dag_execute": 120,
+            "invent_tool": 90,
+            "reason": 60,
+        }
+        timeout = TIMEOUTS.get(action, 30)
 
-        # Special: world_events → WorldMonitor briefing
-        if action == "world_events" and self.worldmonitor:
-            events = self.worldmonitor.get_events()
-            ctx_str = self.user_ctx.build_context_string() if self.user_ctx else ""
-            briefing = self.worldmonitor.summarize_for_briefing(events, ctx_str)
-            self.worldmonitor.open_dashboard()
-            if self.voice:
-                try:
-                    self.voice.speak(briefing)
-                except Exception:
-                    pass
-            response = briefing + f"\n\n📡 WorldMonitor dashboard opened."
-            self._update_history(user_input, response)
-            return response
+        # Progress notification for slow tools
+        SLOW_TOOLS = {"innovate", "evolve", "dag_execute", "invent_tool"}
+        if action in SLOW_TOOLS:
+            log.info(f"⚡ {action} in progress... ({timeout}s max)")
 
-        # Execute tool
-        result = self.executor.execute({"action": action, "parameters": params})
+        # Execute with timeout
+        def execute_tool():
+            return self.executor.execute({"action": action, "parameters": params})
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(execute_tool)
+            try:
+                result = future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                return f"⏱️ `{action}` timed out after {timeout}s. Try a more specific request."
+            except Exception as e:
+                return f"❌ `{action}` failed: {str(e)[:200]}"
+
         log.info(f"[TOOL] {action} → success={result.get('success')}")
 
+        # Handle world_events special (non-blocking, always same tool)
+        if action == "world_events" and result.get("success") and self.worldmonitor:
+            self.worldmonitor.open_dashboard()
+
         # Build context for NVIDIA response
-        mem_ctx = self._get_memory_ctx(user_input)
-        ctx_str = self.user_ctx.build_context_string() if self.user_ctx else ""
+        mem_ctx = self.memory.get_relevant_memory_context(user_input)
         full_ctx = self.semantic.build_response_context(
             user_input, result, mem_ctx, ctx_str
         )
@@ -554,14 +578,8 @@ class Kernel:
     # ── Helpers ─────────────────────────────────────────────────────
 
     def _get_memory_ctx(self, query: str) -> str:
-        try:
-            results = self.memory.search_events(query, limit=3)
-            snippets = [r.get("content", "")[:150] for r in results if r.get("content")]
-            if snippets:
-                return "Relevant memory:\n" + "\n".join(f"- {s}" for s in snippets)
-        except Exception:
-            pass
-        return ""
+        """Smart memory injection with relevance filtering."""
+        return self.memory.get_relevant_memory_context(query)
 
     def _update_history(self, user_input: str, response: str):
         self.history.append({"role": "user", "content": user_input})
