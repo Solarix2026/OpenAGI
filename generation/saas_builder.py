@@ -12,7 +12,7 @@ register_as_tool: "build_saas" tool
 """
 import logging
 from pathlib import Path
-from llm_gateway import call_nvidia
+from core.llm_gateway import call_nvidia
 
 log = logging.getLogger("SaaSBuilder")
 PROJECTS_DIR = Path("./workspace/projects")

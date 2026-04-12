@@ -299,7 +299,7 @@ class WebUIServer:
 
         @app.get("/api/status")
         async def status():
-            from goal_persistence import get_pending_count
+            from core.goal_persistence import get_pending_count
             tools = self.kernel.executor.registry.list_tools()
             return {
                 "online": True,

@@ -56,7 +56,7 @@ class BrowserAgent:
             # Get page text
             text = self._page.inner_text("body")[:3000]
             url = self._page.url
-            from llm_gateway import call_nvidia
+            from core.llm_gateway import call_nvidia
             prompt = f"""Extract from this webpage: {what}
 
 URL: {url}
@@ -101,7 +101,7 @@ Return the extracted information clearly."""
     def do_task(self, task: str) -> dict:
         """HIGH LEVEL: browser task in natural language."""
         self._ensure_browser()
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
         import json
 
         prompt = f"""Plan browser automation for: "{task}"

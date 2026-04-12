@@ -67,7 +67,7 @@ class WorldMonitorClient:
         NVIDIA generates a natural Jarvis-style world briefing.
         Mirrors demo: concise, conversational, mentions 2-3 key stories.
         """
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
 
         headlines = "\n".join(
             f"- [{e['category'].upper()}] {e['title']}: {e['summary'][:120]}"

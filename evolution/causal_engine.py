@@ -25,7 +25,7 @@ class CausalEngine:
         Analyze last N events. For consecutive action→outcome pairs,
         infer causal links. Store in memory meta_knowledge["causal_dag"].
         """
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
         events = self.memory.get_recent_timeline(limit=window)
         events_text = "\n".join(
             f"{i}. [{e['event_type']}] {e['content'][:80]}"
@@ -49,7 +49,7 @@ Return JSON: {{"causal_links": [{{"cause": "event description", "effect": "what 
         What would have happened if we used `alternative` instead of `failed_action`?
         Returns NVIDIA reasoning as string.
         """
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
         dag = self.memory.get_meta_knowledge("causal_dag")
         dag_data = dag.get("content", {}) if dag else {}
         prompt = f"""Counterfactual reasoning for an AI agent:
@@ -65,7 +65,7 @@ Be specific about the outcome difference. 2-3 sentences."""
 
     def why_did_fail(self, tool_name: str) -> str:
         """Explain root cause of a tool's failures using causal analysis."""
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
         outcomes = self.memory.search_events(tool_name, limit=10, event_type="tool_outcome")
         failures = [e for e in outcomes if "fail" in e.get("content", "").lower()]
         if not failures:

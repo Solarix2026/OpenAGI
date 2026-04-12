@@ -51,7 +51,7 @@ class ChronosReverie:
 
     def run_cycle(self) -> dict:
         """Full nightly review cycle. Returns summary dict."""
-        from llm_gateway import send_telegram_alert
+        from core.llm_gateway import send_telegram_alert
         results = {}
         send_telegram_alert("🌙 *CHRONOS_REVERIE starting...*")
 
@@ -60,7 +60,7 @@ class ChronosReverie:
             for topic in ["tool failures this week", "clarification requests that were excessive", "goals that went unresolved"]:
                 result = self.kernel.will.dialectic_review(topic)
                 if result.get("action_item"):
-                    from goal_persistence import add_to_goal_queue
+                    from core.goal_persistence import add_to_goal_queue
                     add_to_goal_queue(
                         f"[REVERIE] {result['action_item']}",
                         priority=0.7,
@@ -80,7 +80,7 @@ class ChronosReverie:
 Events: {events_text}
 
 Return JSON: {{"patterns": [...], "gaps": [...], "retain": [...]}}"""
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
         import json
         import re
         raw = call_nvidia([{"role": "user", "content": consolidation_prompt}], max_tokens=600)

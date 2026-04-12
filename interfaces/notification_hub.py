@@ -49,7 +49,7 @@ class NotificationHub:
 
     def _send_telegram(self, message: str) -> bool:
         try:
-            from llm_gateway import send_telegram_alert
+            from core.llm_gateway import send_telegram_alert
             send_telegram_alert(message)
             return True
         except Exception:

@@ -91,7 +91,7 @@ class WillEngine:
                     delta = (datetime.now() - datetime.fromisoformat(last_ts.replace("Z", ""))).total_seconds() / 3600
                     if delta > 8:
                         # Check if this goal already exists
-                        from goal_persistence import load_goal_queue
+                        from core.goal_persistence import load_goal_queue
                         existing = [g.get("description", "") for g in load_goal_queue() if g.get("status") in ("pending", "active")]
                         goal_desc = "Memory stale >8h. Fetch world events and run context refresh."
                         if not any(goal_desc[:30] in e or e[:30] in goal_desc for e in existing):
@@ -105,7 +105,7 @@ class WillEngine:
 
         # Goal queue stagnation check
         try:
-            from goal_persistence import load_goal_queue
+            from core.goal_persistence import load_goal_queue
             goals = load_goal_queue()
             for goal in goals:
                 if goal.get("status") == "pending":
@@ -127,7 +127,7 @@ class WillEngine:
     def telos_align(self, goal_description: str) -> float:
         """Score goal alignment with system mission. Reject < 0.3."""
         try:
-            from llm_gateway import call_nvidia
+            from core.llm_gateway import call_nvidia
             import re
 
             prompt = f'''Mission: "{self._telos}"
@@ -146,7 +146,7 @@ Score alignment 0.0-1.0. Return JSON: {{"score": 0.7}}'''
     def dialectic_review(self, topic: str) -> dict:
         """Hegelian dialectic: thesis → antithesis → synthesis → action_item."""
         try:
-            from llm_gateway import call_nvidia
+            from core.llm_gateway import call_nvidia
             import re
 
             prompt = f'''Apply Hegelian dialectic for AI self-improvement on: "{topic}"

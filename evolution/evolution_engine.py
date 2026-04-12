@@ -27,7 +27,7 @@ import json
 import re
 import logging
 from pathlib import Path
-from llm_gateway import call_nvidia
+from core.llm_gateway import call_nvidia
 
 log = logging.getLogger("Evolution")
 

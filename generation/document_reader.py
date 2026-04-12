@@ -127,7 +127,7 @@ class DocumentReader:
 
     def analyze_document(self, path: str, question: str) -> dict:
         """Read document and answer question using NVIDIA."""
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
 
         content = self.read_any(path)
         if not content.get("success"):

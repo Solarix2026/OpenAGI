@@ -8,7 +8,7 @@ This is for: logic, analysis, decisions, debugging.
 import re
 import json
 import logging
-from llm_gateway import call_nvidia
+from core.llm_gateway import call_nvidia
 
 log = logging.getLogger("Reasoning")
 

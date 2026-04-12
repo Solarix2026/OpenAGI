@@ -30,15 +30,15 @@ print("=" * 50)
 # TEST 1: Core imports
 @test("Core imports")
 def test_core_imports():
-    from llm_gateway import call_nvidia, call_groq_router
-    from tool_registry import ToolRegistry
-    from memory_core import AgentMemory
-    from semantic_engine import SemanticEngine
+    from core.llm_gateway import call_nvidia, call_groq_router
+    from core.tool_registry import ToolRegistry
+    from core.memory_core import AgentMemory
+    from core.semantic_engine import SemanticEngine
 
 # TEST 2: Tool registry
 @test("Tool registry")
 def test_tool_registry():
-    from tool_registry import ToolRegistry
+    from core.tool_registry import ToolRegistry
     reg = ToolRegistry()
     def dummy(p): return {"success": True}
     reg.register("test", dummy, "Test", {})
@@ -47,8 +47,8 @@ def test_tool_registry():
 # TEST 3: Semantic routing
 @test("Semantic routing (L4)")
 def test_semantic_routing():
-    from tool_executor import ToolExecutor
-    from semantic_engine import SemanticEngine
+    from core.tool_executor import ToolExecutor
+    from core.semantic_engine import SemanticEngine
     executor = ToolExecutor("./workspace/test_run")
     semantic = SemanticEngine(executor.registry)
     intent = semantic.classify_intent("what can you do")
@@ -58,7 +58,7 @@ def test_semantic_routing():
 @test("Memory core")
 def test_memory():
     import tempfile
-    from memory_core import AgentMemory
+    from core.memory_core import AgentMemory
     with tempfile.TemporaryDirectory() as tmp:
         m = AgentMemory(tmp)
         m.log_event("test", "hello world", importance=0.5)
@@ -68,7 +68,7 @@ def test_memory():
 # TEST 5: Document reader
 @test("Document reader")
 def test_doc_reader():
-    from document_reader import DocumentReader
+    from generation.document_reader import DocumentReader
     r = DocumentReader()
     supported = [".docx", ".xlsx", ".csv", ".pdf", ".txt", ".md"]
     for ext in supported:
@@ -77,7 +77,7 @@ def test_doc_reader():
 # TEST 6: Reasoning engine
 @test("Reasoning engine")
 def test_reasoning():
-    from reasoning_engine import ReasoningEngine
+    from evolution.reasoning_engine import ReasoningEngine
     r = ReasoningEngine()
     # Just verify methods exist
     assert callable(r.chain_of_thought)
@@ -87,8 +87,8 @@ def test_reasoning():
 @test("Innovation self-selecting domains (L4)")
 def test_innovation():
     import tempfile
-    from innovation_engine import InnovationEngine
-    from memory_core import AgentMemory
+    from generation.innovation_engine import InnovationEngine
+    from core.memory_core import AgentMemory
     with tempfile.TemporaryDirectory() as tmp:
         m = AgentMemory(tmp)
         inn = InnovationEngine(m)
@@ -99,7 +99,7 @@ def test_innovation():
 # TEST 8: Skill library
 @test("Skill library")
 def test_skill_library():
-    from skill_library import SkillLibrary
+    from agentic.skill_library import SkillLibrary
     lib = SkillLibrary()
     skills = lib.list_skills()
     assert isinstance(skills, list)
@@ -108,8 +108,8 @@ def test_skill_library():
 @test("Habit profiler (L4)")
 def test_habit_profiler():
     import tempfile
-    from habit_profiler import HabitProfiler
-    from memory_core import AgentMemory
+    from autonomy.habit_profiler import HabitProfiler
+    from core.memory_core import AgentMemory
     with tempfile.TemporaryDirectory() as tmp:
         m = AgentMemory(tmp)
         m.log_event("user_message", "Test message", importance=0.6)
@@ -120,7 +120,7 @@ def test_habit_profiler():
 # TEST 10: WebUI server
 @test("WebUI server")
 def test_webui():
-    from webui_server import WebUIServer
+    from interfaces.webui_server import WebUIServer
     # Create minimal mock kernel
     class MockKernel:
         executor = type('obj', (object,), {'registry': None})()

@@ -12,7 +12,7 @@ import re
 import logging
 from pathlib import Path
 from jinja2 import Template
-from llm_gateway import call_nvidia
+from core.llm_gateway import call_nvidia
 
 log = logging.getLogger("RecipeEngine")
 SKILLS_DIR = Path("./skills")

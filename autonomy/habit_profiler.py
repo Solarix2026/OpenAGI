@@ -119,7 +119,7 @@ class HabitProfiler:
 
         # Try to get weather
         try:
-            from user_context import UserContextProvider
+            from core.user_context import UserContextProvider
             uc = UserContextProvider()
             weather = uc.get_weather()
             ctx["weather"] = weather.get("summary", "unknown")
@@ -136,7 +136,7 @@ class HabitProfiler:
         Combines: habit profile + real-time context + recent activity + world events.
         """
         try:
-            from llm_gateway import call_nvidia
+            from core.llm_gateway import call_nvidia
 
             # Gather all context
             profile_data = self.get_profile()
@@ -147,7 +147,7 @@ class HabitProfiler:
             # Get recent goals
             recent_goals = []
             try:
-                from goal_persistence import load_goal_queue
+                from core.goal_persistence import load_goal_queue
                 goals = load_goal_queue()
                 recent_goals = [g.get("description", "") for g in goals[:3] if g.get("status") == "pending"]
             except:
@@ -159,7 +159,7 @@ class HabitProfiler:
             # Get one relevant world event hint if possible
             world_hint = ""
             try:
-                from worldmonitor_client import WorldMonitorClient
+                from core.worldmonitor_client import WorldMonitorClient
                 wm = WorldMonitorClient()
                 events = wm.get_events(limit=3)
                 if events:

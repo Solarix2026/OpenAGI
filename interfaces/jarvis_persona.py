@@ -17,9 +17,9 @@ class JarvisPersona:
         self.worldmonitor = worldmonitor
 
     def morning_briefing(self, city: str = None) -> str:
-        from llm_gateway import call_nvidia
-        from user_context import UserContextProvider
-        from goal_persistence import load_goal_queue, get_pending_count
+        from core.llm_gateway import call_nvidia
+        from core.user_context import UserContextProvider
+        from core.goal_persistence import load_goal_queue, get_pending_count
 
         ctx_provider = UserContextProvider()
         loc = ctx_provider.get_location()
@@ -83,8 +83,8 @@ User's preferred language: {"Chinese" if self._detect_user_language() == "zh" el
         return briefing
 
     def generate_greeting(self, last_topic: str = "") -> str:
-        from llm_gateway import call_nvidia
-        from user_context import UserContextProvider
+        from core.llm_gateway import call_nvidia
+        from core.user_context import UserContextProvider
 
         ctx = UserContextProvider()
         t = ctx.get_time_context()

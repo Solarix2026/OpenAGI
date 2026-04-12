@@ -72,7 +72,7 @@ class ProactiveEngine:
 
     def _generate_personalized_nudge(self, prediction: str) -> str:
         """Generate a natural nudge referencing user's actual context."""
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
 
         recent_topics = self._get_recent_context()
         lang = "Chinese" if self._detect_user_language() == "zh" else "English"
@@ -104,7 +104,7 @@ Example bad:
 
     def _format_event_notification(self, event: dict) -> str:
         """Format world event in user's language."""
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
 
         zh = self._detect_user_language() == "zh"
         lang = "Chinese (Simplified)" if zh else "English"
@@ -163,7 +163,7 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
                 prediction = self.k.habits.predict_next_need()
                 if prediction:
                     nudge = self._generate_personalized_nudge(prediction)
-                    from llm_gateway import send_telegram_alert
+                    from core.llm_gateway import send_telegram_alert
                     send_telegram_alert(nudge)
                     log.info(f"[HABIT] Nudge sent (idle {idle_mins:.0f}min)")
                 self._last_habit_check = now
@@ -179,7 +179,7 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
                 log.debug(f"Chronos check error: {e}")
 
         # ── Auto-execute simple goals ─────────────────────────────
-        from goal_persistence import get_next_priority_goal, update_goal_status
+        from core.goal_persistence import get_next_priority_goal, update_goal_status
         goal = get_next_priority_goal()
         if goal and goal.get("source") in ("conatus", "chronos"):
             if goal.get("type") in ("refresh", "research"):

@@ -13,7 +13,7 @@ Architecture:
   NVIDIA → semantic depth analysis, clarification decisions, response generation
 """
 import re, json, logging
-from llm_gateway import call_groq_router, call_nvidia
+from core.llm_gateway import call_groq_router, call_nvidia
 
 log = logging.getLogger("SemanticEngine")
 

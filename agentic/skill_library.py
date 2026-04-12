@@ -11,7 +11,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from llm_gateway import call_nvidia
+from core.llm_gateway import call_nvidia
 import urllib.request
 import urllib.error
 

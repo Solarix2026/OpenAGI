@@ -25,11 +25,11 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
-from llm_gateway import call_nvidia, call_groq_router, send_telegram_alert, get_telegram_updates
-from memory_core import AgentMemory
-from tool_executor import ToolExecutor
-from semantic_engine import SemanticEngine
-from goal_persistence import load_goal_queue, add_to_goal_queue, get_pending_count
+from core.llm_gateway import call_nvidia, call_groq_router, send_telegram_alert, get_telegram_updates
+from core.memory_core import AgentMemory
+from core.tool_executor import ToolExecutor
+from core.semantic_engine import SemanticEngine
+from core.goal_persistence import load_goal_queue, add_to_goal_queue, get_pending_count
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,21 +82,21 @@ class Kernel:
 
         # User context (geo + weather)
         try:
-            from user_context import UserContextProvider
+            from core.user_context import UserContextProvider
             self.user_ctx = UserContextProvider()
         except ImportError:
             self.user_ctx = None
 
         # Jarvis persona
         try:
-            from jarvis_persona import JarvisPersona
+            from interfaces.jarvis_persona import JarvisPersona
             self.jarvis = JarvisPersona(self.memory)
         except ImportError:
             self.jarvis = None
 
         # Voice
         try:
-            from voice_engine import VoiceEngine
+            from interfaces.voice_engine import VoiceEngine
             self.voice = VoiceEngine()
             if self.jarvis:
                 self.jarvis.voice = self.voice
@@ -106,7 +106,7 @@ class Kernel:
 
         # Google integration
         try:
-            from google_integration import GoogleIntegration
+            from interfaces.google_integration import GoogleIntegration
             self.google = GoogleIntegration()
             if self.jarvis:
                 self.jarvis.google = self.google
@@ -115,7 +115,7 @@ class Kernel:
 
         # WorldMonitor
         try:
-            from worldmonitor_client import WorldMonitorClient
+            from core.worldmonitor_client import WorldMonitorClient
             self.worldmonitor = WorldMonitorClient()
             if self.jarvis:
                 self.jarvis.worldmonitor = self.worldmonitor
@@ -125,7 +125,7 @@ class Kernel:
 
         # Innovation engine
         try:
-            from innovation_engine import InnovationEngine
+            from generation.innovation_engine import InnovationEngine
             self.innovation = InnovationEngine()
             self.innovation.register_as_tool(self.executor.registry)
             log.info("🔬 InnovationEngine registered")
@@ -134,8 +134,8 @@ class Kernel:
 
         # Recipe engine + skill library
         try:
-            from recipe_engine import RecipeEngine
-            from skill_library import SkillLibrary
+            from agentic.recipe_engine import RecipeEngine
+            from agentic.skill_library import SkillLibrary
             self.recipes = RecipeEngine()
             self.skills = SkillLibrary()
             for name in self.skills.list_skills():
@@ -147,32 +147,32 @@ class Kernel:
 
         # Subagent manager
         try:
-            from subagent_manager import SubagentManager
+            from agentic.subagent_manager import SubagentManager
             self.subagents = SubagentManager(self)
         except ImportError:
             self.subagents = None
 
         # ── Autonomy tier ────────────────────────────────────────
         try:
-            from will_engine import WillEngine
+            from autonomy.will_engine import WillEngine
             self.will = WillEngine(self.memory, self.executor.registry, lambda d,p,s: add_to_goal_queue(d,p,s,self.memory))
         except ImportError:
             self.will = None
 
         try:
-            from beep_filter import BeepFilter
+            from autonomy.beep_filter import BeepFilter
             self.beep = BeepFilter(self.memory)
         except ImportError:
             self.beep = None
 
         try:
-            from habit_profiler import HabitProfiler
+            from autonomy.habit_profiler import HabitProfiler
             self.habits = HabitProfiler(self.memory)
         except ImportError:
             self.habits = None
 
         try:
-            from proactive_engine import ProactiveEngine
+            from autonomy.proactive_engine import ProactiveEngine
             self.proactive = ProactiveEngine(self)
             self.proactive.start()
             log.info("🔁 ProactiveEngine started")
@@ -181,32 +181,32 @@ class Kernel:
 
         # ── Self-evolution tier ──────────────────────────────────
         try:
-            from metacognition import MetacognitiveEngine
+            from evolution.metacognition import MetacognitiveEngine
             self.meta = MetacognitiveEngine(self.memory)
         except ImportError:
             self.meta = None
 
         try:
-            from causal_engine import CausalEngine
+            from evolution.causal_engine import CausalEngine
             self.causal = CausalEngine(self.memory)
         except ImportError:
             self.causal = None
 
         try:
-            from strategic_planner import StrategicPlanner
+            from evolution.strategic_planner import StrategicPlanner
             self.planner = StrategicPlanner(self.memory, self.executor)
         except ImportError:
             self.planner = None
 
         try:
-            from evolution_engine import EvolutionEngine
+            from evolution.evolution_engine import EvolutionEngine
             self.evolution = EvolutionEngine(self.memory, self.meta, self.executor.registry)
             self.evolution.register_as_tool(self.executor.registry)
         except ImportError:
             self.evolution = None
 
         try:
-            from tool_invention import ToolInventionEngine
+            from evolution.tool_invention import ToolInventionEngine
             self.inventor = ToolInventionEngine(self.memory, self.executor.registry)
             self.inventor.register_as_tool(self.executor.registry)
         except ImportError:
@@ -214,15 +214,15 @@ class Kernel:
 
         # ── Agentic workflow tier ────────────────────────────────
         try:
-            from dag_workflow import DAGWorkflowEngine
+            from agentic.dag_workflow import DAGWorkflowEngine
             self.dag = DAGWorkflowEngine(self)
             self.dag.register_as_tool(self.executor.registry)
         except ImportError:
             self.dag = None
 
         try:
-            from recipe_engine import RecipeEngine
-            from skill_library import SkillLibrary
+            from agentic.recipe_engine import RecipeEngine
+            from agentic.skill_library import SkillLibrary
             self.recipes = RecipeEngine()
             self.skills = SkillLibrary()
             for name in self.skills.list_skills():
@@ -233,7 +233,7 @@ class Kernel:
             self.skills = None
 
         try:
-            from subagent_manager import SubagentManager
+            from agentic.subagent_manager import SubagentManager
             self.subagents = SubagentManager(self)
             self.subagents.register_as_tool(self.executor.registry)
         except ImportError:
@@ -241,7 +241,7 @@ class Kernel:
 
         # ── Computer control tier ────────────────────────────────
         try:
-            from vision_engine import VisionEngine
+            from control.vision_engine import VisionEngine
             self.vision = VisionEngine()
             self.vision.register_as_tool(self.executor.registry)
             log.info("👁 VisionEngine ready")
@@ -249,7 +249,7 @@ class Kernel:
             self.vision = None
 
         try:
-            from computer_control import ComputerControl
+            from control.computer_control import ComputerControl
             self.computer = ComputerControl(self.vision)
             self.computer.register_as_tool(self.executor.registry)
             log.info("🖥 ComputerControl ready")
@@ -257,7 +257,7 @@ class Kernel:
             self.computer = None
 
         try:
-            from browser_agent import BrowserAgent
+            from control.browser_agent import BrowserAgent
             self.browser = BrowserAgent(self.vision)
             self.browser.register_as_tool(self.executor.registry)
             log.info("🌐 BrowserAgent ready")
@@ -266,7 +266,7 @@ class Kernel:
 
         # ── Interface tier ───────────────────────────────────────
         try:
-            from voice_engine import VoiceEngine
+            from interfaces.voice_engine import VoiceEngine
             self.voice = VoiceEngine()
             if self.jarvis:
                 self.jarvis.voice = self.voice
@@ -275,7 +275,7 @@ class Kernel:
             self.voice = None
 
         try:
-            from google_integration import GoogleIntegration
+            from interfaces.google_integration import GoogleIntegration
             self.google = GoogleIntegration()
             if self.jarvis:
                 self.jarvis.google = self.google
@@ -283,13 +283,13 @@ class Kernel:
             self.google = None
 
         try:
-            from notification_hub import NotificationHub
+            from interfaces.notification_hub import NotificationHub
             self.notify = NotificationHub(self.voice)
         except ImportError:
             self.notify = None
 
         try:
-            from mcp_adapter import MCPAdapter
+            from safety.mcp_adapter import MCPAdapter
             self.mcp = MCPAdapter()
             self.mcp.register_mcp_tools_to_registry(self.executor.registry)
         except ImportError:
@@ -297,21 +297,21 @@ class Kernel:
 
         # ── Generation tier ──────────────────────────────────────
         try:
-            from saas_builder import SaaSBuilder
+            from generation.saas_builder import SaaSBuilder
             self.saas = SaaSBuilder()
             self.saas.register_as_tool(self.executor.registry)
         except ImportError:
             self.saas = None
 
         try:
-            from video_deck_skill import VideoDeckSkill
+            from generation.video_deck_skill import VideoDeckSkill
             self.video_deck = VideoDeckSkill(self.executor)
             self.video_deck.register_as_tool(self.executor.registry)
         except ImportError:
             self.video_deck = None
 
         try:
-            from multi_agent_router import MultiAgentRouter
+            from routing.multi_agent_router import MultiAgentRouter
             self.multi_agent = MultiAgentRouter(self.memory)
             self.multi_agent.register_as_tool(self.executor.registry)
         except ImportError:
@@ -319,13 +319,13 @@ class Kernel:
 
         # ── Safety tier ───────────────────────────────────────────
         try:
-            from guard_protocols import GuardProtocols
+            from safety.guard_protocols import GuardProtocols
             self.guard = GuardProtocols(self.memory)
         except ImportError:
             self.guard = None
 
         try:
-            from plugin_api import PluginManager
+            from safety.plugin_api import PluginManager
             self.plugins = PluginManager(self.executor.registry)
             self.plugins.load_all()
         except ImportError:
@@ -333,7 +333,7 @@ class Kernel:
 
         # ── CHRONOS nightly review ────────────────────────────────
         try:
-            from chronos_reverie import ChronosReverie
+            from autonomy.chronos_reverie import ChronosReverie
             self.chronos = ChronosReverie(self)
             self.chronos.start()
             log.info("🌙 CHRONOS_REVERIE scheduled")
@@ -431,7 +431,7 @@ class Kernel:
     def _run_innovate_with_timeout(self, user_input: str, params: dict) -> str:
         """Run innovate tool with timeout and progress updates."""
         import concurrent.futures
-        from llm_gateway import send_telegram_alert
+        from core.llm_gateway import send_telegram_alert
 
         # Send progress update for Telegram
         send_telegram_alert("🧠 Starting innovation process...")
@@ -585,7 +585,7 @@ class Kernel:
     def run_telegram(self):
         """Telegram bot mode."""
         import threading
-        from llm_gateway import send_telegram_alert, get_telegram_updates
+        from core.llm_gateway import send_telegram_alert, get_telegram_updates
         log.info("📱 Telegram mode started")
         send_telegram_alert("✅ OpenAGI online. Send me a message.")
 
@@ -646,11 +646,17 @@ class Kernel:
     def run_web(self):
         """Web UI mode with QR code phone bridge."""
         try:
-            from webui_server import WebUIServer
+            # Import from project root, not relative to core package
+            import sys
+            from pathlib import Path
+            project_root = Path(__file__).parent.parent
+            if str(project_root) not in sys.path:
+                sys.path.insert(0, str(project_root))
+            from interfaces.webui_server import WebUIServer
             self.webui = WebUIServer(self)
             self.webui.start()
-        except ImportError:
-            log.error("webui_server.py not found. Build it first.")
+        except ImportError as e:
+            log.error(f"webui_server import failed: {e}")
 
     def run_cli(self):
         """Interactive CLI mode."""

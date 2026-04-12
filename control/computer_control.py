@@ -116,7 +116,7 @@ Steps taken so far: {history}
 What is the SINGLE next action to take?
 
 Return JSON: {{"action": "click|type|hotkey|scroll|done|failed", "x_fraction": 0.5,  // only for click "y_fraction": 0.3,  // only for click "text": "...",  // only for type "keys": ["ctrl","c"],  // only for hotkey "direction": "down",  // only for scroll "reason": "why this action"}}"""
-            from llm_gateway import call_nvidia
+            from core.llm_gateway import call_nvidia
             raw = call_nvidia([{"role": "user", "content": plan_prompt}], max_tokens=200, fast=True)
             m = re.search(r'\{.*\}', raw, re.DOTALL)
             if not m:

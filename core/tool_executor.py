@@ -24,7 +24,7 @@ class ToolExecutor:
         self.registry = self._build_registry()
 
     def _build_registry(self):
-        from tool_registry import ToolRegistry
+        from core.tool_registry import ToolRegistry
         reg = ToolRegistry()
 
         reg.register("websearch", self._websearch,
@@ -307,7 +307,7 @@ class ToolExecutor:
     def _world_events(self, params: dict) -> dict:
         """Fetch world events via RSS."""
         try:
-            from worldmonitor_client import WorldMonitorClient
+            from core.worldmonitor_client import WorldMonitorClient
             wm = WorldMonitorClient()
             cats = params.get("categories")
             events = wm.get_events(categories=cats, limit=15)

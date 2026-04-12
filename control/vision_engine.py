@@ -84,7 +84,7 @@ class VisionEngine:
         """Compare before/after screenshots to verify action succeeded."""
         before_desc = self.analyze_screenshot(before_path)["description"]
         after_desc = self.analyze_screenshot(after_path)["description"]
-        from llm_gateway import call_nvidia
+        from core.llm_gateway import call_nvidia
 
         prompt = f"""Did this action succeed: "{expected}"?
 

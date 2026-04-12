@@ -9,7 +9,7 @@ register_as_tool: "video_deck" tool.
 """
 import logging
 from pathlib import Path
-from llm_gateway import call_nvidia
+from core.llm_gateway import call_nvidia
 
 log = logging.getLogger("VideoDeck")
 DECKS_DIR = Path("./workspace/decks")
@@ -26,7 +26,7 @@ class VideoDeckSkill:
         Returns paths to markdown and HTML versions.
         """
         # Step 1: Research
-        from tool_executor import ToolExecutor
+        from core.tool_executor import ToolExecutor
         search_result = self.executor.execute({
             "action": "websearch",
             "parameters": {"query": f"{topic} latest trends developments"}

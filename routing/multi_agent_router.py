@@ -16,7 +16,7 @@ register_as_tool: "specialist_agent" tool.
 """
 import os
 import logging
-from llm_gateway import call_nvidia
+from core.llm_gateway import call_nvidia
 
 log = logging.getLogger("MultiAgent")
 

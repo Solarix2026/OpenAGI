@@ -46,10 +46,24 @@ class AgentMemory:
         log.info(f"Memory initialized at {self.db_path}")
 
     def _connect(self):
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn = sqlite3.connect(
+            self.db_path,
+            check_same_thread=False,
+            timeout=5.0,
+            isolation_level=None  # Autocommit mode for less locking
+        )
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA temp_store=MEMORY")
         return conn
+
+    def __del__(self):
+        """Ensure database connection is closed on destruction."""
+        if hasattr(self, '_conn') and self._conn:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
 
     def _init_schema(self):
         with self._lock:
