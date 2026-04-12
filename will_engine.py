@@ -90,11 +90,16 @@ class WillEngine:
                 if last_ts:
                     delta = (datetime.now() - datetime.fromisoformat(last_ts.replace("Z", ""))).total_seconds() / 3600
                     if delta > 8:
-                        new_goals.append({
-                            "description": "Memory stale >8h. Fetch world events and run context refresh.",
-                            "priority": 0.5,
-                            "source": "conatus"
-                        })
+                        # Check if this goal already exists
+                        from goal_persistence import load_goal_queue
+                        existing = [g.get("description", "") for g in load_goal_queue() if g.get("status") in ("pending", "active")]
+                        goal_desc = "Memory stale >8h. Fetch world events and run context refresh."
+                        if not any(goal_desc[:30] in e or e[:30] in goal_desc for e in existing):
+                            new_goals.append({
+                                "description": goal_desc,
+                                "priority": 0.5,
+                                "source": "conatus"
+                            })
         except Exception as e:
             log.debug(f"Memory staleness check error: {e}")
 
