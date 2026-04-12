@@ -121,13 +121,33 @@ def send_telegram_alert(text: str):
     if not token or not chat_id:
         return
     try:
-        requests.post(
+        # Clean text for Telegram - remove problematic markdown chars
+        clean = text[:4096]
+        for char in ['_', '*', '[', ']', '(', ')', '`', '~', '>', '#', '+', '-', '=', '|', '{', '}']:
+            clean = clean.replace(char, f'\\{char}')
+        resp = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text[:4096], "parse_mode": "Markdown"},
+            json={"chat_id": chat_id, "text": clean, "parse_mode": "MarkdownV2"},
             timeout=5
         )
+        if resp.status_code != 200:
+            # Fallback: send without markdown
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text[:4096]},
+                timeout=5
+            )
     except Exception as e:
         log.debug(f"Telegram send failed: {e}")
+        # Last resort: plain text
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text[:4096]},
+                timeout=5
+            )
+        except:
+            pass
 
 
 def send_telegram_file(path: str, caption=""):
