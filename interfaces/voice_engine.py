@@ -17,8 +17,34 @@ import re
 
 log = logging.getLogger("Voice")
 
-TTS_VOICE = os.getenv("TTS_VOICE", "en-GB-RyanNeural")
+# Available edge-tts voices by language
+TTS_VOICES = {
+    "en": os.getenv("TTS_VOICE_EN", "en-GB-RyanNeural"),  # British male
+    "zh": os.getenv("TTS_VOICE_ZH", "zh-CN-YunxiNeural"),  # Mandarin male
+    "zh_female": "zh-CN-XiaoxiaoNeural",  # Mandarin female
+    "zh_tw": "zh-TW-YunJheNeural",  # Taiwan Mandarin
+}
 WAKE_WORD = os.getenv("WAKE_WORD", "jarvis").lower()
+
+
+def _detect_language(text: str) -> str:
+    """Detect if text is Chinese or English.
+    If >15% characters are Chinese, treat as Chinese."""
+    if not text:
+        return "en"
+    zh_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+    total_chars = len([c for c in text if c.isalpha()])
+    if total_chars == 0:
+        return "en"
+    return "zh" if zh_chars / total_chars > 0.15 else "en"
+
+
+def _get_tts_voice(text: str) -> str:
+    """Select appropriate TTS voice based on text language."""
+    lang = _detect_language(text)
+    if lang == "zh":
+        return TTS_VOICES["zh"]
+    return TTS_VOICES["en"]
 
 
 class VoiceEngine:
@@ -100,7 +126,7 @@ class VoiceEngine:
             import soundfile as sf
 
             async def _tts():
-                communicate = edge_tts.Communicate(clean[:500], TTS_VOICE)
+                communicate = edge_tts.Communicate(clean[:500], _get_tts_voice(clean))
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                     tmp = f.name
                     await communicate.save(tmp)
