@@ -66,6 +66,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e8
 <button class="qbtn" onclick="send('list goals')">Goals</button>
 <button class="qbtn" onclick="send('what is happening in the world')">World</button>
 <button class="qbtn" onclick="send('evolve')">Evolve</button>
+<button class="qbtn" onclick="showSkills()">🧩 Skills</button>
 </div>
 <div id="inputbar">
 <button id="voicebtn" onclick="toggleVoice()">Mic</button>
@@ -112,8 +113,8 @@ function toggleVoice(){
   } else {recognizer.stop();}
 }
 connect();
-</script>
-</body>
+
+async function showSkills(){ 115 document.getElementById('skills-modal').style.display='block'; 116 const r=await fetch('/api/skills');const d=await r.json(); 117 const list=document.getElementById('skills-list'); 118 list.innerHTML=d.skills.map(s=>`<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:12px;margin-bottom:8px"> 119 <div style="font-weight:600;color:#e8e8e8">${s.name}</div> 120 <div style="color:#888;font-size:13px;margin:4px 0">${s.description||''}</div> 121 <div style="display:flex;gap:8px;align-items:center"> 122 <span style="font-size:11px;color:#666">v${s.version} · ${s.author}</span> 123 ${(s.tags||[]).map(t=>`<span style="background:#2a2a2a;padding:2px 8px;border-radius:10px;font-size:10px;color:#888">${t}</span>`).join('')} 124 <button onclick="runSkill('${s.name}')" style="margin-left:auto;background:#1a6fb5;border:none;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;cursor:pointer">Run</button> 125 </div></div>`).join('')||'<div style="color:#666">No skills installed</div>'; 126 } 127 async function runSkill(n){document.getElementById('skills-modal').style.display='none';send('run skill: '+n);} 128 async function installSkill(){ 129 const u=document.getElementById('skill-url').value.trim();if(!u)return; 130 await fetch('/api/skills/install',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u})}); 131 showSkills(); 132 } 133 </script> 134 </body>
 </html>"""
 
 
@@ -181,8 +182,69 @@ class WebUIServer:
                 "tools": len(tools),
                 "tool_names": tools[:10],
                 "goals": get_pending_count(),
-                "version": "5.0"
+                "version": "5.0",
+                "modules": {
+                    "jarvis": bool(self.kernel.jarvis),
+                    "proactive": bool(self.kernel.proactive),
+                    "evolution": bool(self.kernel.evolution),
+                    "chronos": bool(self.kernel.chronos),
+                    "vision": bool(self.kernel.vision),
+                    "voice": bool(self.kernel.voice)
+                }
             }
+
+        @app.get("/api/skills")
+        async def list_skills():
+            if not self.kernel.skills:
+                return {"skills": []}
+            skills = []
+            for name in self.kernel.skills.list_skills():
+                try:
+                    skill = self.kernel.skills.load_skill(name)
+                    skills.append({
+                        "name": name,
+                        "description": skill.get("description", ""),
+                        "version": skill.get("version", "1.0"),
+                        "author": skill.get("author", "local"),
+                        "tags": skill.get("tags", [])
+                    })
+                except Exception:
+                    pass
+            return {"skills": skills, "count": len(skills)}
+
+        @app.post("/api/skills/run")
+        async def run_skill(data: dict):
+            name = data.get("name", "")
+            params = data.get("params", {})
+            if not self.kernel.skills:
+                return {"success": False, "error": "Skills not loaded"}
+            try:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, self.kernel.skills.run_skill, name, params, self.kernel
+                )
+                return {"success": True, "result": result}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        @app.post("/api/skills/install")
+        async def install_skill(data: dict):
+            url = data.get("url", "")
+            if not self.kernel.skills:
+                return {"success": False, "error": "Skills not loaded"}
+            try:
+                name = await asyncio.get_event_loop().run_in_executor(
+                    None, self.kernel.skills.install_skill, url
+                )
+                return {"success": True, "installed": name}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        @app.get("/api/capabilities")
+        async def capabilities():
+            if not self.kernel.meta:
+                return {"capabilities": []}
+            report = self.kernel.meta.capability_report()
+            return {"capabilities": report}
 
         @app.post("/api/chat")
         async def chat(data: dict):
