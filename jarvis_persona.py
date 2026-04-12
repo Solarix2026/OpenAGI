@@ -49,18 +49,22 @@ class JarvisPersona:
             except Exception:
                 pass
 
-        prompt = f"""Generate a Jarvis morning briefing based on:
-{components}
+        # L4: Give NVIDIA the FACTS. Let it decide structure.
+        prompt = f"""You are Jarvis. Generate a morning briefing for your boss.
 
-Requirements:
-- Start with time greeting: "{time_ctx['greeting']} sir."
-- Mention weather in {city}
-- If emails: mention unread count
-- If goals: mention pending count
-- If headline: mention top world story in 1 sentence
-- End with a brief "what do you need today?"
-- Max 4 sentences total. Warm, precise, Jarvis-style.
-- Language: English (unless user is Chinese-speaking based on memory)
+Context:
+- Time: {time_ctx['period']} ({time_ctx['time_str']})
+{"Note: It's very late — adapt tone accordingly." if time_ctx.get('is_late_night') else ""}
+- Location: {city}
+- Weather: {components['weather']}
+- Pending goals: {components['pending_goals']}
+{f"- Unread emails: {components['unread_emails']}" if 'unread_emails' in components else ""}
+{f"- Today's calendar: {components.get('today_events', 0)} events" if 'today_events' in components else ""}
+{f"- Top news: {components.get('top_headline','')}" if 'top_headline' in components else ""}
+
+Deliver this briefing in your natural Jarvis style. Adapt length and tone to the time of day and what's actually worth saying. Don't force structure if there's nothing to report on a dimension.
+
+User's preferred language: {"Chinese" if self._detect_user_language() == "zh" else "English"}
 """
         briefing = call_nvidia(
             [{"role": "user", "content": prompt}],
@@ -99,3 +103,10 @@ Sound natural, not robotic. Vary the greeting each time."""
             max_tokens=80,
             fast=True
         )
+
+    def _detect_user_language(self) -> str:
+        """Check recent messages to detect language preference."""
+        recent = self.memory.search_events("", limit=10)
+        user_msgs = [e["content"] for e in recent if e.get("event_type") == "user_message"]
+        zh_count = sum(1 for m in user_msgs if any('\u4e00' <= c <= '\u9fff' for c in m))
+        return "zh" if zh_count > len(user_msgs) * 0.4 else "en"

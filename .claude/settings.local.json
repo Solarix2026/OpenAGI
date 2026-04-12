@@ -17,7 +17,18 @@
       "Bash(git rm:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(python -m py_compile will_engine.py)",
+      "Bash(python -m py_compile beep_filter.py)",
+      "Bash(python -m py_compile habit_profiler.py)",
+      "Bash(ls -la *.py)",
+      "Read(//d C:/Users/mjtan/desktop/**)",
+      "Bash(python -m py_compile kernel.py will_engine.py beep_filter.py habit_profiler.py proactive_engine.py metacognition.py causal_engine.py strategic_planner.py evolution_engine.py tool_invention.py dag_workflow.py subagent_manager.py recipe_engine.py skill_library.py vision_engine.py computer_control.py browser_agent.py voice_engine.py webui_server.py google_integration.py notification_hub.py multi_agent_router.py guard_protocols.py mcp_adapter.py saas_builder.py video_deck_skill.py plugin_api.py call_mode.py chronos_reverie.py)",
+      "Bash(python -m py_compile kernel.py will_engine.py beep_filter.py habit_profiler.py proactive_engine.py metacognition.py causal_engine.py strategic_planner.py evolution_engine.py tool_invention.py dag_workflow.py chronos_reverie.py subagent_manager.py recipe_engine.py skill_library.py vision_engine.py computer_control.py browser_agent.py voice_engine.py webui_server.py google_integration.py notification_hub.py multi_agent_router.py guard_protocols.py mcp_adapter.py saas_builder.py video_deck_skill.py plugin_api.py call_mode.py)",
+      "Bash(python:*)",
+      "Bash(find . -name \"*.py\" -not -path \"./venv/*\" -not -path \"./__pycache__/*\" -exec python -m py_compile {} \\\\; -print)",
+      "Bash(find . -name \"*.py\" -not -path \"./venv/*\" -not -path \"./__pycache__/*\" -exec wc -l {} \\\\;)",
+      "Bash(git reset:*)"
     ]
   }
 }

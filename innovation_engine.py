@@ -33,9 +33,30 @@ Return JSON:
         m = re.search(r"\{.*\}", raw, re.DOTALL)
         return json.loads(m.group(0)) if m else {"axioms": []}
 
+    def _select_relevant_domains(self, problem: str) -> list[str]:
+        """NVIDIA selects the most relevant analogical domains for THIS problem."""
+        prompt = f"""For the problem: "{problem}"
+
+Which knowledge domains would provide the most UNEXPECTED but useful analogies?
+Avoid obvious domains. Prioritize cross-domain transfer that produces non-obvious insights.
+
+Consider: biology, neuroscience, thermodynamics, game theory, evolutionary psychology, military history, urban planning, music theory, epidemiology, ecology, linguistics, materials science, geology, anthropology, computer science, philosophy, economics...
+
+Select 4-5 domains most structurally analogous to this problem's core tension.
+
+Return JSON: {{"domains": ["domain1", "domain2", ...], "reasoning": "..."}}"""
+        raw = call_nvidia([{"role":"user","content":prompt}], max_tokens=200, fast=True)
+        import json, re
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if m:
+            result = json.loads(m.group(0))
+            return result.get("domains", ["biology","economics","physics","game theory"])
+        return ["biology", "economics", "physics", "game theory"]
+
     def analogical_transfer(self, problem: str, domains: list = None) -> list:
-        """Find solutions from analogous domains."""
-        domains = domains or ["biology", "military strategy", "economics", "architecture", "physics"]
+        """Find solutions from analogous domains. Self-selects if domains not provided."""
+        if not domains:
+            domains = self._select_relevant_domains(problem)
 
         prompt = f"""Find analogous solutions for:
 
@@ -75,20 +96,41 @@ Return JSON:
         return result.get("solutions", [])
 
     def generate_novel_solutions(self, problem: str, constraints: list = None, n: int = 5) -> list:
-        """Full pipeline: axioms + analogies → synthesize N novel solutions."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        # Run axiom decomposition and analogical transfer IN PARALLEL
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            axiom_future = executor.submit(self.decompose_to_axioms, problem)
-            analogy_future = executor.submit(self.analogical_transfer, problem)
-            try:
-                axioms = axiom_future.result(timeout=45)
-            except:
-                axioms = {"axioms": []}
-            try:
-                analogies = analogy_future.result(timeout=45)
-            except:
-                analogies = []
+        """Adaptive pipeline: NVIDIA decides strategy; self-selects domains."""
+        from concurrent.futures import ThreadPoolExecutor
+        # Let NVIDIA decide the reasoning strategy for THIS problem
+        strategy_prompt = f"""For problem: "{problem}"
+        What reasoning strategy produces the best novel solutions?
+        Options: parallel (axioms+analogies simultaneously), sequential (axioms first then inform analogies), creative_first (analogies first then constrain with axioms)
+        Return JSON: {{"strategy": "parallel|sequential|creative_first", "reason": "why for this problem type"}}"""
+        strategy_raw = call_nvidia([{"role":"user","content":strategy_prompt}], max_tokens=100, fast=True)
+        m = re.search(r'\{.*\}', strategy_raw, re.DOTALL)
+        strategy = json.loads(m.group(0)).get("strategy","parallel") if m else "parallel"
+
+        domains = self._select_relevant_domains(problem)
+
+        if strategy == "sequential":
+            # Axioms first, then use them to guide analogies
+            axioms = self.decompose_to_axioms(problem)
+            analogy_context = f"Given axioms: {axioms.get('axioms',[])}"
+            analogies = self.analogical_transfer(problem + " | " + analogy_context, domains)
+        elif strategy == "creative_first":
+            # Analogies first, then validate against axioms
+            analogies = self.analogical_transfer(problem, domains)
+            axioms = self.decompose_to_axioms(problem)
+        else:
+            # Parallel (original behavior, but with self-selected domains)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                axiom_future = executor.submit(self.decompose_to_axioms, problem)
+                analogy_future = executor.submit(self.analogical_transfer, problem, domains)
+                try:
+                    axioms = axiom_future.result(timeout=45)
+                except:
+                    axioms = {"axioms": []}
+                try:
+                    analogies = analogy_future.result(timeout=45)
+                except:
+                    analogies = []
 
         analogy_summary = "\n".join(
             f"- From {a.get('domain','?')}: {a.get('transfer_to_problem','')}"

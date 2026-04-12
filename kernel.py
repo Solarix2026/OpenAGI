@@ -366,38 +366,7 @@ class Kernel:
             self.memory.update_meta_knowledge("pending_clarification", {})
             log.info(f"[CLARIFY] Merged input: {user_input[:80]}")
 
-        # ── 2. Special commands ──────────────────────────────────────
-        lower = user_input.lower().strip()
-        if lower in ("morning briefing", "早安简报", "morning brief"):
-            if self.jarvis:
-                return self.jarvis.morning_briefing()
-        if lower in ("status", "状态"):
-            return self._status_report()
-        if lower in ("list goals", "我的目标", "目标"):
-            return self._list_goals()
-        if lower in ("evolve", "self improve", "自我进化"):
-            if self.evolution:
-                return self.evolution.run_full_cycle()
-        if lower in ("what can you do", "capabilities", "你能做什么"):
-            if self.meta:
-                return self.meta.capability_report()
-        # BEEP Filter commands
-        if self.beep and ("beep" in lower or "启用beep" in lower or "beep过滤" in lower):
-            if "启用" in user_input or "on" in lower or "start" in lower:
-                self.memory.update_meta_knowledge("beep_enabled", True)
-                return "✅ BEEP Filter 已启用。我会自动过滤低相关性通知。"
-            elif "关闭" in lower or "off" in lower or "stop" in lower:
-                self.memory.update_meta_knowledge("beep_enabled", False)
-                return "🛑 BEEP Filter 已关闭。"
-            elif "画像" in lower or "profile" in lower:
-                profile = self.beep._get_interest_profile()
-                return f"📊 你的兴趣画像（按关键词频次）：\n" + "\n".join([f"- {k}: {v}" for k, v in sorted(profile.items(), key=lambda x: -x[1])[:10]])
-        # Habit Profile command
-        if self.habits and ("习惯" in lower or "habit" in lower or "画像" in lower):
-            habits = self.habits.build_profile()
-            return self.habits.format_profile(habits)
-
-        # ── 3. Intent classification (Groq router) ──────────────────
+        # ── 2. Intent classification (Groq router) ──────────────────
         intent = self.semantic.classify_intent(user_input)
         log.info(f"[INTENT] {intent}")
 
