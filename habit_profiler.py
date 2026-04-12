@@ -95,38 +95,137 @@ class HabitProfiler:
             pass
         return self.build_profile()
 
+    def _get_recent_activity_summary(self) -> str:
+        """Get summary of recent user activity from memory."""
+        try:
+            recent = self.memory.get_recent_timeline(limit=20)
+            activities = []
+            for e in recent:
+                if e.get("event_type") == "user_message":
+                    activities.append(e.get("content", "")[:80])
+                elif e.get("event_type") == "tool_execution":
+                    activities.append(f"[Tool: {e.get('content', '')}]")
+            return " | ".join(activities[:5]) if activities else "no recent activity"
+        except:
+            return "unknown"
+
+    def _get_current_context(self) -> dict:
+        """Gather real-time context for prediction."""
+        ctx = {
+            "hour": datetime.now().hour,
+            "weekday": datetime.now().strftime("%A"),
+            "is_weekend": datetime.now().weekday() >= 5,
+        }
+
+        # Try to get weather
+        try:
+            from user_context import UserContextProvider
+            uc = UserContextProvider()
+            weather = uc.get_weather()
+            ctx["weather"] = weather.get("summary", "unknown")
+            ctx["location"] = uc.get_location().get("city", "unknown")
+        except:
+            ctx["weather"] = "unknown"
+            ctx["location"] = "unknown"
+
+        return ctx
+
     def predict_next_need(self) -> str | None:
         """
-        Based on: current time, habit profile, recent goals, recent events.
-        Ask NVIDIA: what does this user likely need right now?
-        Returns suggestion string or None if no confident prediction.
+        L4: Predict user's next need based on comprehensive context.
+        Combines: habit profile + real-time context + recent activity + world events.
         """
         try:
             from llm_gateway import call_nvidia
 
+            # Gather all context
             profile_data = self.get_profile()
+            context = self._get_current_context()
+            recent_activity = self._get_recent_activity_summary()
             hour = datetime.now().hour
+
+            # Get recent goals
             recent_goals = []
             try:
                 from goal_persistence import load_goal_queue
-                recent_goals = [g.get("description", "") for g in load_goal_queue()[:5]]
-            except Exception:
+                goals = load_goal_queue()
+                recent_goals = [g.get("description", "") for g in goals[:3] if g.get("status") == "pending"]
+            except:
                 pass
 
-            prompt = f"""User habit profile: {json.dumps(profile_data, ensure_ascii=False)}
-Current hour: {hour}
-Pending goals: {recent_goals}
+            # Detect language preference
+            lang = "zh" if profile_data.get("preferred_language") == "zh" else "en"
 
-What does this user MOST LIKELY need right now, based on their patterns? Be specific. If no confident prediction, say null.
+            # Get one relevant world event hint if possible
+            world_hint = ""
+            try:
+                from worldmonitor_client import WorldMonitorClient
+                wm = WorldMonitorClient()
+                events = wm.get_events(limit=3)
+                if events:
+                    # Check if any event relates to user's top topics
+                    top_topics = set(profile_data.get("top_topics", []))
+                    for e in events:
+                        if any(t in e.get("title", "").lower() or t in e.get("category", "").lower() for t in top_topics):
+                            world_hint = f"Relevant world event: {e.get('title', '')}"
+                            break
+            except:
+                pass
 
-Return JSON: {{"prediction": "specific suggestion or null", "confidence": 0.0-1.0}}"""
+            # Time-of-day contextual notes
+            time_note = ""
+            if 6 <= hour < 9:
+                time_note = "Early morning - user likely starting day"
+            elif 9 <= hour < 12:
+                time_note = "Morning work hours - productive time"
+            elif 12 <= hour < 14:
+                time_note = "Lunch/midday - possible break time"
+            elif 14 <= hour < 18:
+                time_note = "Afternoon - continued work"
+            elif 18 <= hour < 22:
+                time_note = "Evening - winding down or personal projects"
+            else:
+                time_note = "Late night - user might need summaries or async tasks"
 
-            raw = call_nvidia([{"role": "user", "content": prompt}], max_tokens=120, fast=True)
+            prompt = f"""You are Jarvis, an intelligent assistant. Predict what the user needs RIGHT NOW.
+
+## User Context
+- Active hours: {profile_data.get("peak_hours", ["unknown"])}
+- Common topics: {profile_data.get("top_topics", ["unknown"])[:5]}
+- Language: {lang}
+- Recent activity: {recent_activity[:200]}
+
+## Real-time Context
+- Time: {hour}:00 ({time_note})
+- Location: {context.get("location", "unknown")}
+- Weather: {context.get("weather", "unknown")}
+- Day: {context.get("weekday")} ({"weekend" if context.get("is_weekend") else "weekday"})
+
+## Current State
+- Pending goals: {recent_goals if recent_goals else "none"}
+- {world_hint if world_hint else "No urgent world events"}
+
+## Task
+Based on ALL the above, what would be the MOST HELFUL prediction of their next need?
+
+Rules:
+1. Be SPECIFIC - "check email" is generic; "summarize the morning briefing" is specific
+2. Reference actual context - mention the weather, time of day, or recent activity if relevant
+3. Consider the user's patterns - if they code at night, suggest code-related tasks
+4. Language: Respond in {lang.upper()} to match user preference
+5. Confidence: Only predict if you're genuinely confident (>=0.7)
+
+Return JSON: {{"prediction": "specific suggestion or null", "confidence": 0.0-1.0, "reasoning": "why this prediction"}}"""
+
+            raw = call_nvidia([{"role": "user", "content": prompt}], max_tokens=200, fast=True)
             m = re.search(r'\{.*\}', raw, re.DOTALL)
             if m:
                 d = json.loads(m.group(0))
-                if d.get("confidence", 0) > 0.65:
-                    return d.get("prediction")
+                pred = d.get("prediction")
+                conf = d.get("confidence", 0)
+                if pred and pred.lower() != "null" and conf >= 0.7:
+                    log.info(f"[HABIT] Predicted (conf={conf:.2f}): {pred[:60]}")
+                    return pred
 
         except Exception as e:
             log.debug(f"Prediction failed: {e}")
