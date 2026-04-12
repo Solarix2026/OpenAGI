@@ -28,7 +28,8 @@
       "Bash(python:*)",
       "Bash(find . -name \"*.py\" -not -path \"./venv/*\" -not -path \"./__pycache__/*\" -exec python -m py_compile {} \\\\; -print)",
       "Bash(find . -name \"*.py\" -not -path \"./venv/*\" -not -path \"./__pycache__/*\" -exec wc -l {} \\\\;)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Read(//c/Users/mjtan/AppData/Local/Temp/claude/C--Users-mjtan-desktop-openagi/3f71e304-1cb1-4ac7-97df-0839bc2a8d55/tasks/**)"
     ]
   }
 }
