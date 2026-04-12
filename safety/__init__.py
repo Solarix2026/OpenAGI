@@ -1,3 +1,4 @@
-"""Safety package - Guard protocols"""
-from .guard_protocols import GuardProtocols
-from .plugin_api import PluginManager
+"""Safety package — Guard protocols and security"""
+from .prompt_injection import PromptInjectionDetector
+
+__all__ = ['PromptInjectionDetector']

@@ -123,6 +123,14 @@ class Kernel:
         except ImportError:
             self.worldmonitor = None
 
+        # Security: Prompt injection detection
+        try:
+            from safety.prompt_injection import PromptInjectionDetector
+            self.injection_detector = PromptInjectionDetector()
+            log.info("Prompt injection detection active")
+        except ImportError:
+            self.injection_detector = None
+
         # Innovation engine
         try:
             from generation.innovation_engine import InnovationEngine
@@ -355,6 +363,14 @@ class Kernel:
         user_input = (user_input or "").strip()
         if not user_input:
             return self._generate_response("(empty message)", [], None)
+
+        # ── Security: Prompt injection detection ─────────────────────
+        if self.injection_detector:
+            is_inj, reason = self.injection_detector.is_injection(user_input)
+            if is_inj:
+                log.warning(f"[SECURITY] Blocked injection attempt: {reason}")
+                self.memory.log_event("security_block", user_input[:100], {"reason": reason}, importance=0.9)
+                return "I noticed that message contains patterns that violate my operational constraints."
 
         self.memory.log_event("user_message", user_input, importance=0.6)
 
