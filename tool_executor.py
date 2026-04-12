@@ -183,6 +183,9 @@ class ToolExecutor:
             "vs code": "code",
             "terminal": "wt.exe",
             "warp": "warp.exe",
+            "paint": "mspaint.exe",
+            "画图": "mspaint.exe",
+            "画图板": "mspaint.exe",
         }
         resolved = aliases.get(app.lower(), app)
 
@@ -194,10 +197,16 @@ class ToolExecutor:
             except Exception:
                 pass
 
-        # Method 2: subprocess shell
+        # Method 2: subprocess shell with verification
         try:
-            subprocess.Popen(resolved, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return {"success": True, "message": f"Launched: {app}"}
+            import time
+            proc = subprocess.Popen(resolved, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Wait briefly and check if process actually exists
+            time.sleep(0.5)
+            # Try to poll, if None it's still running
+            poll_result = proc.poll()
+            if poll_result is None or poll_result == 0:
+                return {"success": True, "message": f"Launched: {app}"}
         except Exception as e:
             pass
 

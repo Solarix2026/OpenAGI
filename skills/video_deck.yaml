@@ -1,0 +1,27 @@
+description: Generate a video presentation deck
+parameters:
+  slides:
+    default: 10
+    type: integer
+  style:
+    default: professional
+    type: string
+  topic:
+    required: true
+    type: string
+steps:
+- id: research
+  params:
+    query: '{{topic}} latest trends'
+  tool: websearch
+  type: tool
+- id: outline
+  prompt: 'Create a {{slides}}-slide outline for: {{topic}}. Style: {{style}}. Research:
+    {{research.text}}'
+  type: llm
+- id: save
+  params:
+    content: '{{outline.text}}'
+    path: decks/{{topic|replace(' ', '_')}}_deck.md
+  tool: write_file
+  type: tool

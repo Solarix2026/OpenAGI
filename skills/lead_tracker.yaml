@@ -1,0 +1,16 @@
+description: Track and organize pipeline leads
+parameters:
+  lead_info:
+    required: true
+    type: string
+steps:
+- id: parse
+  prompt: 'Parse lead info: {{lead_info}}. Return JSON: {company, contact, status,
+    priority}'
+  type: llm
+- id: save
+  params:
+    content: '{{parse.text}}'
+    path: leads/{{parse.company|default('unknown')}}.json
+  tool: write_file
+  type: tool

@@ -1,0 +1,23 @@
+description: Review code for issues
+parameters:
+  file_path:
+    required: true
+    type: string
+steps:
+- id: read
+  params:
+    path: '{{file_path}}'
+  tool: read_file
+  type: tool
+- id: review
+  prompt: 'Review this code and identify: bugs, security issues, performance problems,
+    style violations. Code: {{read.content}}'
+  type: llm
+- id: report
+  params:
+    content: '## Code Review
+
+      {{review.text}}'
+    path: reviews/{{file_path|replace('/','_')}}_review.md
+  tool: write_file
+  type: tool

@@ -1,0 +1,23 @@
+description: Generate morning briefing
+parameters: {}
+steps:
+- id: weather
+  params:
+    query: user location weather
+  tool: memory_search
+  type: tool
+- id: goals
+  params: {}
+  tool: list_goals
+  type: tool
+- id: news
+  params:
+    categories:
+    - technology
+    - ai
+  tool: world_events
+  type: tool
+- id: briefing
+  prompt: 'Create a warm morning briefing. Weather: {{weather.text}}, Goals: {{goals.text}},
+    News: {{news.text}}. Be brief and encouraging.'
+  type: llm

@@ -1,0 +1,29 @@
+description: Generate SaaS project scaffold
+parameters:
+  description:
+    required: true
+    type: string
+  features:
+    default:
+    - auth
+    - dashboard
+    type: list
+  name:
+    required: true
+    type: string
+steps:
+- id: design
+  prompt: 'Design a FastAPI SaaS called ''{{name}}''. Features: {{features}}. Description:
+    {{description}}. Return JSON: {main_py: ''...'', index_html: ''...''}'
+  type: llm
+- id: mkdir
+  params:
+    command: mkdir -p workspace/projects/{{name}}
+  tool: shell_command
+  type: tool
+- id: write_main
+  params:
+    content: '{{design.text}}'
+    path: workspace/projects/{{name}}/main.py
+  tool: write_file
+  type: tool

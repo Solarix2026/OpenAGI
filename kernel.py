@@ -152,6 +152,194 @@ class Kernel:
         except ImportError:
             self.subagents = None
 
+        # ── Autonomy tier ────────────────────────────────────────
+        try:
+            from will_engine import WillEngine
+            self.will = WillEngine(self.memory, self.executor.registry, lambda d,p,s: add_to_goal_queue(d,p,s,self.memory))
+        except ImportError:
+            self.will = None
+
+        try:
+            from beep_filter import BeepFilter
+            self.beep = BeepFilter(self.memory)
+        except ImportError:
+            self.beep = None
+
+        try:
+            from habit_profiler import HabitProfiler
+            self.habits = HabitProfiler(self.memory)
+        except ImportError:
+            self.habits = None
+
+        try:
+            from proactive_engine import ProactiveEngine
+            self.proactive = ProactiveEngine(self)
+            self.proactive.start()
+            log.info("🔁 ProactiveEngine started")
+        except ImportError:
+            self.proactive = None
+
+        # ── Self-evolution tier ──────────────────────────────────
+        try:
+            from metacognition import MetacognitiveEngine
+            self.meta = MetacognitiveEngine(self.memory)
+        except ImportError:
+            self.meta = None
+
+        try:
+            from causal_engine import CausalEngine
+            self.causal = CausalEngine(self.memory)
+        except ImportError:
+            self.causal = None
+
+        try:
+            from strategic_planner import StrategicPlanner
+            self.planner = StrategicPlanner(self.memory, self.executor)
+        except ImportError:
+            self.planner = None
+
+        try:
+            from evolution_engine import EvolutionEngine
+            self.evolution = EvolutionEngine(self.memory, self.meta, self.executor.registry)
+            self.evolution.register_as_tool(self.executor.registry)
+        except ImportError:
+            self.evolution = None
+
+        try:
+            from tool_invention import ToolInventionEngine
+            self.inventor = ToolInventionEngine(self.memory, self.executor.registry)
+            self.inventor.register_as_tool(self.executor.registry)
+        except ImportError:
+            self.inventor = None
+
+        # ── Agentic workflow tier ────────────────────────────────
+        try:
+            from dag_workflow import DAGWorkflowEngine
+            self.dag = DAGWorkflowEngine(self)
+            self.dag.register_as_tool(self.executor.registry)
+        except ImportError:
+            self.dag = None
+
+        try:
+            from recipe_engine import RecipeEngine
+            from skill_library import SkillLibrary
+            self.recipes = RecipeEngine()
+            self.skills = SkillLibrary()
+            for name in self.skills.list_skills():
+                self.recipes.recipe_to_tool(name, self.executor)
+            log.info(f"📚 {len(self.skills.list_skills())} skills loaded")
+        except ImportError:
+            self.recipes = None
+            self.skills = None
+
+        try:
+            from subagent_manager import SubagentManager
+            self.subagents = SubagentManager(self)
+            self.subagents.register_as_tool(self.executor.registry)
+        except ImportError:
+            self.subagents = None
+
+        # ── Computer control tier ────────────────────────────────
+        try:
+            from vision_engine import VisionEngine
+            self.vision = VisionEngine()
+            self.vision.register_as_tool(self.executor.registry)
+            log.info("👁 VisionEngine ready")
+        except ImportError:
+            self.vision = None
+
+        try:
+            from computer_control import ComputerControl
+            self.computer = ComputerControl(self.vision)
+            self.computer.register_as_tool(self.executor.registry)
+            log.info("🖥 ComputerControl ready")
+        except ImportError:
+            self.computer = None
+
+        try:
+            from browser_agent import BrowserAgent
+            self.browser = BrowserAgent(self.vision)
+            self.browser.register_as_tool(self.executor.registry)
+            log.info("🌐 BrowserAgent ready")
+        except ImportError:
+            self.browser = None
+
+        # ── Interface tier ───────────────────────────────────────
+        try:
+            from voice_engine import VoiceEngine
+            self.voice = VoiceEngine()
+            if self.jarvis:
+                self.jarvis.voice = self.voice
+            log.info("🎤 VoiceEngine ready")
+        except ImportError:
+            self.voice = None
+
+        try:
+            from google_integration import GoogleIntegration
+            self.google = GoogleIntegration()
+            if self.jarvis:
+                self.jarvis.google = self.google
+        except ImportError:
+            self.google = None
+
+        try:
+            from notification_hub import NotificationHub
+            self.notify = NotificationHub(self.voice)
+        except ImportError:
+            self.notify = None
+
+        try:
+            from mcp_adapter import MCPAdapter
+            self.mcp = MCPAdapter()
+            self.mcp.register_mcp_tools_to_registry(self.executor.registry)
+        except ImportError:
+            self.mcp = None
+
+        # ── Generation tier ──────────────────────────────────────
+        try:
+            from saas_builder import SaaSBuilder
+            self.saas = SaaSBuilder()
+            self.saas.register_as_tool(self.executor.registry)
+        except ImportError:
+            self.saas = None
+
+        try:
+            from video_deck_skill import VideoDeckSkill
+            self.video_deck = VideoDeckSkill(self.executor)
+            self.video_deck.register_as_tool(self.executor.registry)
+        except ImportError:
+            self.video_deck = None
+
+        try:
+            from multi_agent_router import MultiAgentRouter
+            self.multi_agent = MultiAgentRouter(self.memory)
+            self.multi_agent.register_as_tool(self.executor.registry)
+        except ImportError:
+            self.multi_agent = None
+
+        # ── Safety tier ───────────────────────────────────────────
+        try:
+            from guard_protocols import GuardProtocols
+            self.guard = GuardProtocols(self.memory)
+        except ImportError:
+            self.guard = None
+
+        try:
+            from plugin_api import PluginManager
+            self.plugins = PluginManager(self.executor.registry)
+            self.plugins.load_all()
+        except ImportError:
+            self.plugins = None
+
+        # ── CHRONOS nightly review ────────────────────────────────
+        try:
+            from chronos_reverie import ChronosReverie
+            self.chronos = ChronosReverie(self)
+            self.chronos.start()
+            log.info("🌙 CHRONOS_REVERIE scheduled")
+        except ImportError:
+            self.chronos = None
+
         # WebUI server reference (set when web mode starts)
         self._webui_push = None
 
@@ -187,6 +375,27 @@ class Kernel:
             return self._status_report()
         if lower in ("list goals", "我的目标", "目标"):
             return self._list_goals()
+        if lower in ("evolve", "self improve", "自我进化"):
+            if self.evolution:
+                return self.evolution.run_full_cycle()
+        if lower in ("what can you do", "capabilities", "你能做什么"):
+            if self.meta:
+                return self.meta.capability_report()
+        # BEEP Filter commands
+        if self.beep and ("beep" in lower or "启用beep" in lower or "beep过滤" in lower):
+            if "启用" in user_input or "on" in lower or "start" in lower:
+                self.memory.update_meta_knowledge("beep_enabled", True)
+                return "✅ BEEP Filter 已启用。我会自动过滤低相关性通知。"
+            elif "关闭" in lower or "off" in lower or "stop" in lower:
+                self.memory.update_meta_knowledge("beep_enabled", False)
+                return "🛑 BEEP Filter 已关闭。"
+            elif "画像" in lower or "profile" in lower:
+                profile = self.beep._get_interest_profile()
+                return f"📊 你的兴趣画像（按关键词频次）：\n" + "\n".join([f"- {k}: {v}" for k, v in sorted(profile.items(), key=lambda x: -x[1])[:10]])
+        # Habit Profile command
+        if self.habits and ("习惯" in lower or "habit" in lower or "画像" in lower):
+            habits = self.habits.build_profile()
+            return self.habits.format_profile(habits)
 
         # ── 3. Intent classification (Groq router) ──────────────────
         intent = self.semantic.classify_intent(user_input)
@@ -317,15 +526,30 @@ class Kernel:
         messages += history
         messages.append({"role": "user", "content": user_input})
 
-        response = call_nvidia(messages, max_tokens=800)
+        # Call NVIDIA with timeout protection
+        import concurrent.futures
+        try:
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(call_nvidia, messages, max_tokens=800)
+                response = future.result(timeout=60)
+        except concurrent.futures.TimeoutError:
+            log.error("NVIDIA timeout after 60s")
+            response = "抱歉，系统响应超时。请重试。"
+        except Exception as e:
+            log.error(f"NVIDIA call failed: {e}")
+            response = f"系统错误: {str(e)[:200]}"
+
         self._update_history(user_input, response)
         self.memory.log_event("assistant_response", response[:500], importance=0.4)
 
+        # TTS in background thread to avoid blocking Telegram
         if self.voice:
-            try:
-                self.voice.speak(response)
-            except Exception:
-                pass
+            def speak_async(text):
+                try:
+                    self.voice.speak(text)
+                except:
+                    pass
+            threading.Thread(target=speak_async, args=(response,), daemon=True).start()
 
         return response
 
@@ -353,9 +577,26 @@ class Kernel:
         pending = get_pending_count()
         recent = self.memory.get_recent_timeline(limit=3)
         recent_str = "; ".join(r.get("content", "")[:40] for r in recent)
+        modules = []
+        if self.proactive: modules.append("Proactive")
+        if self.will: modules.append("Will")
+        if self.habits: modules.append("Habits")
+        if self.meta: modules.append("Meta")
+        if self.causal: modules.append("Causal")
+        if self.planner: modules.append("Planner")
+        if self.evolution: modules.append("Evolution")
+        if self.inventor: modules.append("Inventor")
+        if self.dag: modules.append("DAG")
+        if self.subagents: modules.append("Subagents")
+        if self.vision: modules.append("Vision")
+        if self.computer: modules.append("Computer")
+        if self.browser: modules.append("Browser")
+        if self.webui: modules.append("WebUI")
+        if self.chronos: modules.append("Chronos")
         return (
             f"**OpenAGI Status**\n"
             f"Tools: {len(tools)} registered\n"
+            f"Modules: {', '.join(modules) or 'none'}\n"
             f"Pending goals: {pending}\n"
             f"Recent: {recent_str}\n"
             f"Voice: {'✅' if self.voice else '❌'}\n"
@@ -437,7 +678,8 @@ class Kernel:
         """Web UI mode with QR code phone bridge."""
         try:
             from webui_server import WebUIServer
-            WebUIServer(self).start()
+            self.webui = WebUIServer(self)
+            self.webui.start()
         except ImportError:
             log.error("webui_server.py not found. Build it first.")
 
@@ -463,6 +705,14 @@ class Kernel:
         self.shutdown()
 
     def shutdown(self):
+        if self.proactive:
+            self.proactive.stop()
+        if hasattr(self, 'chronos'):
+            self.chronos.stop()
+        if self.voice:
+            self.voice.stop()
+        if self.browser:
+            self.browser.close()
         self.memory.close()
         log.info("OpenAGI shutdown complete")
 
