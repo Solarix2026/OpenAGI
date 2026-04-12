@@ -2,21 +2,23 @@
 llm_gateway.py — LLM routing layer
 
 ARCHITECTURE LAW:
-  Groq = routing/classification only → returns JSON, never prose
-  NVIDIA NIM = all reasoning, responses, generation, summarization
-  If NVIDIA fails → Groq 70B fallback (prose quality)
-  If Groq fails → raise (routing is critical path)
+Groq = routing/classification only → returns JSON, never prose
+NVIDIA NIM = primary brain (Kimi k2.5 from NVIDIA NIM)
+If NVIDIA fails → Groq 70B fallback
+If Groq fails → raise (routing is critical path)
 """
 import os, logging, time, json, re
 from dotenv import load_dotenv
-load_dotenv()  # Load .env file
+load_dotenv() # Load .env file
 from openai import OpenAI
 
 log = logging.getLogger("LLMGateway")
 
 GROQ_ROUTER_MODEL = os.getenv("GROQ_ROUTER_MODEL", "llama-3.1-8b-instant")
-GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile"  # prose fallback
-NVIDIA_MAIN_MODEL = os.getenv("NVIDIA_MAIN_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1")
+GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile" # prose fallback
+
+# NVIDIA NIM - Kimi k2.5 as primary
+NVIDIA_MAIN_MODEL = os.getenv("NVIDIA_MAIN_MODEL", "moonshotai/kimi-k2.5")
 NVIDIA_FAST_MODEL = os.getenv("NVIDIA_FAST_MODEL", "meta/llama-3.1-70b-instruct")
 
 _groq_client = None
@@ -36,7 +38,8 @@ def _get_nvidia():
     if not _nvidia_client:
         _nvidia_client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
-            api_key=os.getenv("NVIDIA_API_KEY")
+            api_key=os.getenv("NVIDIA_API_KEY"),
+            timeout=60.0 # 60s for Kimi k2.5
         )
     return _nvidia_client
 
@@ -51,7 +54,7 @@ def call_groq_router(messages: list, max_tokens=250) -> str:
             model=GROQ_ROUTER_MODEL,
             messages=messages,
             max_tokens=max_tokens,
-            temperature=0.0,  # deterministic routing
+            temperature=0.0, # deterministic routing
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
@@ -62,8 +65,14 @@ def call_groq_router(messages: list, max_tokens=250) -> str:
 def call_nvidia(messages: list, max_tokens=1200, temperature=0.7, fast=False) -> str:
     """
     PRIMARY BRAIN. All responses, reasoning, generation go here.
+    Uses Kimi k2.5 from NVIDIA NIM.
     fast=True → use smaller/faster model for low-stakes calls.
     """
+    # Check if NVIDIA key exists
+    if not os.getenv("NVIDIA_API_KEY"):
+        log.debug("NVIDIA_API_KEY not set, using Groq fallback")
+        return call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
+
     model = NVIDIA_FAST_MODEL if fast else NVIDIA_MAIN_MODEL
     try:
         resp = _get_nvidia().chat.completions.create(
@@ -74,29 +83,33 @@ def call_nvidia(messages: list, max_tokens=1200, temperature=0.7, fast=False) ->
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        log.warning(f"NVIDIA failed ({e}), falling back to Groq 70B")
-        try:
-            resp = _get_groq().chat.completions.create(
-                model=GROQ_FALLBACK_MODEL,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-            return resp.choices[0].message.content.strip()
-        except Exception as e2:
-            log.error(f"Both LLMs failed: {e2}")
-            return "I'm having trouble reaching my reasoning engine. Please try again."
+        log.warning(f"NVIDIA/Kimi failed ({e}), falling back to Groq 70B")
+        return call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
+
+
+def call_groq_fallback(messages: list, max_tokens=1200, temperature=0.7) -> str:
+    """Final fallback - Groq 70B."""
+    try:
+        resp = _get_groq().chat.completions.create(
+            model=GROQ_FALLBACK_MODEL,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        log.error(f"All LLMs failed: {e}")
+        return "I'm having trouble reaching my reasoning engine. Please try again."
 
 
 def call_groq(messages: list, model=None, max_tokens=500, temperature=0.7) -> str:
-    """Legacy compat — routes to NVIDIA for prose, Groq for JSON routing."""
-    # Detect if this is a routing/JSON call or a prose call
+    """Legacy compat — routes to NVIDIA/Kimi for prose, Groq for JSON routing."""
     last = messages[-1].get("content", "") if messages else ""
     is_json_call = "JSON" in last or "Return JSON" in last or max_tokens <= 250
 
     if is_json_call:
         return call_groq_router(messages, max_tokens=max_tokens)
-    return call_nvidia(messages, max_tokens=max_tokens, fast=True)
+    return call_nvidia(messages, max_tokens=max_tokens, temperature=temperature)
 
 
 # ── Telegram helpers ──────────────────────────────────────────────
@@ -163,8 +176,9 @@ def check_providers() -> dict:
         status["groq"] = f"FAIL: {e}"
 
     try:
-        call_nvidia([{"role": "user", "content": "Say OK"}], max_tokens=10, fast=True)
+        call_nvidia([{"role": "user", "content": "Say OK"}], max_tokens=10)
         status["nvidia"] = "OK"
+        status["model"] = NVIDIA_MAIN_MODEL
     except Exception as e:
         status["nvidia"] = f"FAIL: {e}"
 
