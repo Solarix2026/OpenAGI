@@ -1,4 +1,4 @@
-# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# Copyright (c) 2026 HackerTMJ
 # OpenAGI — Autonomous Intelligence System
 # MIT License — https://github.com/HackerTMJ/OpenAGI
 

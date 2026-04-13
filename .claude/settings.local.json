@@ -37,7 +37,8 @@
       "Bash(ls venv/Scripts/*.exe)",
       "Bash(git checkout:*)",
       "Bash(curl -s http://192.168.68.103:8765/)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "Bash(find .:*)"
     ]
   }
 }
