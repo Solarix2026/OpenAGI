@@ -19,9 +19,11 @@ SKILLS_DIR = Path("./skills")
 
 
 class RecipeEngine:
-    def __init__(self):
+    def __init__(self, memory=None):
         self._recipes: dict[str, dict] = {}
+        self.memory = memory
         self._load_all()
+        self._triggers = self._load_triggers()
 
     def _load_all(self):
         """Load all YAML recipes from skills directory."""
@@ -142,3 +144,79 @@ class RecipeEngine:
             category="recipe"
         )
         return tool_func
+
+    # ── Subrecipe Support ───────────────────────────────────────────
+
+    def _load_triggers(self) -> dict:
+        """Load trigger recipes from meta_knowledge."""
+        if not self.memory:
+            return {}
+        try:
+            from core.memory_core import AgentMemory
+            meta = self.memory.get_meta_knowledge("recipe_triggers")
+            return meta.get("content", {}) if meta else {}
+        except Exception:
+            return {}
+
+    def _save_triggers(self, triggers: dict):
+        """Save trigger recipes to meta_knowledge."""
+        if self.memory:
+            self.memory.update_meta_knowledge("recipe_triggers", triggers)
+
+    def register_trigger(self, recipe_name: str, trigger: dict):
+        """
+        Register a trigger for automatic recipe execution.
+        trigger = {
+            "type": "cron",  # "cron", "event", "webhook"
+            "schedule": "0 8 * * *",  # 8am daily (cron)
+            "event": "user_idle_30min",
+            "webhook_url": "..."
+        }
+        """
+        self._triggers[recipe_name] = trigger
+        self._save_triggers(self._triggers)
+        log.info(f"[TRIGGER] Registered {recipe_name}: {trigger}")
+
+    def unregister_trigger(self, recipe_name: str):
+        """Remove a trigger."""
+        if recipe_name in self._triggers:
+            del self._triggers[recipe_name]
+            self._save_triggers(self._triggers)
+
+    def check_and_fire_triggers(self, executor, memory) -> list:
+        """
+        Called by ProactiveEngine every cycle.
+        Returns list of fired triggers.
+        """
+        import schedule
+        from datetime import datetime
+        from core.goal_persistence import add_to_goal_queue
+
+        fired = []
+        for recipe_name, trigger in self._triggers.items():
+            if trigger.get("type") == "cron":
+                # Check if cron schedule matches current time
+                cron = trigger.get("schedule", "")
+                if self._cron_matches(cron, datetime.now()):
+                    # Execute recipe
+                    result = self.execute_recipe(recipe_name, executor, {})
+                    if result.get("success"):
+                        fired.append(recipe_name)
+                        log.info(f"[TRIGGER] Fired {recipe_name} at {datetime.now()}")
+            elif trigger.get("type") == "event":
+                # Event-based triggers handled by ProactiveEngine
+                pass
+
+        return fired
+
+    def _cron_matches(self, cron: str, dt: datetime) -> bool:
+        """Simple cron matching (minute hour * * *)."""
+        try:
+            parts = cron.split()
+            if len(parts) >= 2:
+                minute, hour = int(parts[0]), int(parts[1])
+                return dt.minute == minute and dt.hour == hour
+        except Exception:
+            pass
+        return False
+
