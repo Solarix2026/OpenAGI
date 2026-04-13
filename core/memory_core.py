@@ -1,6 +1,6 @@
 # Copyright (c) 2026 HackerTMJ
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/HackerTMJ/OpenAGI
+# MIT License — https://github.com/Solarix2026/OpenAGI
 
 """
 memory_core.py — 4-tier memory system v2.0 (Background FAISS)

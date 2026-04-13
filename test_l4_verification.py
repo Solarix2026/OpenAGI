@@ -1,6 +1,6 @@
 # Copyright (c) 2026 HackerTMJ
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/HackerTMJ/OpenAGI
+# MIT License — https://github.com/Solarix2026/OpenAGI
 
 """
 L4 Verification — 10 Test Prompts

@@ -1,6 +1,6 @@
 # Copyright (c) 2026 HackerTMJ
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/HackerTMJ/OpenAGI
+# MIT License — https://github.com/Solarix2026/OpenAGI
 
 """
 user_context.py — Real-time geo + weather context injection v2.0 (TTL Cache)

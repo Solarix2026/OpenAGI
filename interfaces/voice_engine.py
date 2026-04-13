@@ -1,6 +1,6 @@
 # Copyright (c) 2026 HackerTMJ
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/HackerTMJ/OpenAGI
+# MIT License — https://github.com/Solarix2026/OpenAGI
 
 """
 voice_engine.py — Complete voice I/O pipeline

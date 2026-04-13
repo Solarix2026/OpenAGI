@@ -1,6 +1,6 @@
 # Copyright (c) 2026 HackerTMJ
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/HackerTMJ/OpenAGI
+# MIT License — https://github.com/Solarix2026/OpenAGI
 
 """
 beep_filter.py — Noise filter for all proactive events before they reach the user.
