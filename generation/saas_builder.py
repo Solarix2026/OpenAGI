@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """
 saas_builder.py — SaaS project scaffolding
 
@@ -294,16 +298,208 @@ python main.py
 Built with FastAPI + Tailwind CSS
 '''
 
+    # ── GitHub Spark Style Builder ─────────────────────────────
+
+    def build_from_description(self, description: str, stack: str = "react-fastapi") -> dict:
+        """
+        GitHub Spark equivalent: Natural language → complete working app.
+
+        Example: "Build a meal planner that remembers dietary preferences"
+        → Complete app in ./workspace/projects/{name}/
+        Returns: {success, app_name, path, preview_url, files_created, design, next_steps}
+        """
+        import json
+        import re
+        import subprocess
+        from core.llm_gateway import call_nvidia
+
+        # Step 1: App design (architecture decision)
+        design_prompt = f"""Design a complete web app: "{description}"
+
+Return ONLY JSON:
+{{
+  "app_name": "snake_case_name",
+  "description": "one line",
+  "frontend": "React+TypeScript",
+  "backend": "FastAPI+Python",
+  "features": ["feature1", "feature2", "feature3"],
+  "db_schema": [{{"table": "...", "columns": ["..."]}}],
+  "api_endpoints": [{{"method": "GET/POST", "path": "/api/...", "description": "what it does"}}],
+  "ai_features": ["chatbot|content_gen|recommendations|none"]
+}}"""
+        raw = call_nvidia([{"role": "user", "content": design_prompt}], max_tokens=800)
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not m:
+            return {"success": False, "error": "Design generation failed"}
+
+        try:
+            design = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            return {"success": False, "error": "Invalid design JSON"}
+
+        app_name = design.get("app_name", "myapp")
+        project_dir = PROJECTS_DIR / app_name
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        # Step 2: Generate backend
+        backend_prompt = f"""Generate a complete FastAPI backend for: {description}
+
+Design: {json.dumps(design)}
+
+Requirements:
+- Complete working Python code
+- SQLite with aiosqlite for persistence
+- CORS enabled for localhost:3000
+- All endpoints from the design
+- Error handling and validation
+- Include /api/health endpoint
+- If AI features: include OpenAI-compatible /api/ai endpoint
+
+Write ONLY Python code:"""
+        backend_code = call_nvidia([{"role": "user", "content": backend_prompt}], max_tokens=3000)
+        backend_code = re.sub(r'```python\n?|```\n?', '', backend_code).strip()
+        (project_dir / "main.py").write_text(backend_code, encoding="utf-8")
+
+        # Step 3: Generate frontend
+        frontend_prompt = f"""Generate a complete single-file React+TypeScript app:
+
+App: {description}
+Backend: http://localhost:8000/api
+Design: {json.dumps(design)}
+
+Use:
+- React 18 via CDN
+- Tailwind CSS via CDN
+- Dark modern UI
+- Fetch API for backend calls
+
+Write ONLY the HTML file:"""
+        frontend_code = call_nvidia([{"role": "user", "content": frontend_prompt}], max_tokens=3000)
+        frontend_code = re.sub(r'```html?\n?|```\n?', '', frontend_code).strip()
+        (project_dir / "index.html").write_text(frontend_code, encoding="utf-8")
+
+        # Step 4: Config files
+        requirements = """fastapi
+uvicorn
+aiosqlite
+python-multipart
+httpx
+"""
+        (project_dir / "requirements.txt").write_text(requirements, encoding="utf-8")
+
+        readme = f"""# {design.get('app_name','App')}
+
+{design.get('description','')}
+
+## Run
+
+```bash
+pip install -r requirements.txt
+python main.py &
+open index.html
+```
+
+## Features
+
+"""
+        for f in design.get('features', []):
+            readme += f"- {f}\n"
+        (project_dir / "README.md").write_text(readme, encoding="utf-8")
+
+        # Step 5: Start dev server (optional)
+        try:
+            subprocess.Popen(
+                ["python", "-m", "uvicorn", "main:app", "--port", "8000", "--reload"],
+                cwd=str(project_dir),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except Exception:
+            pass
+
+        preview_url = f"file://{project_dir.resolve()}/index.html"
+
+        return {
+            "success": True,
+            "app_name": app_name,
+            "path": str(project_dir),
+            "preview_url": preview_url,
+            "backend_port": 8000,
+            "files_created": ["main.py", "index.html", "requirements.txt", "README.md"],
+            "design": design,
+            "next_steps": [
+                f"Open: {preview_url}",
+                "Refine: 'make the header blue' or 'add user authentication'",
+                "Deploy: 'deploy this app to GitHub'"
+            ]
+        }
+
+    def refine_app(self, app_name: str, instruction: str) -> dict:
+        """Iterative refinement: 'make the header blue' → update index.html"""
+        import re
+        from core.llm_gateway import call_nvidia
+
+        project_dir = PROJECTS_DIR / app_name
+        if not project_dir.exists():
+            return {"success": False, "error": f"App '{app_name}' not found"}
+
+        # Read current files
+        current_files = {}
+        for fname in ["main.py", "index.html"]:
+            fpath = project_dir / fname
+            if fpath.exists():
+                current_files[fname] = fpath.read_text(encoding="utf-8")[:3000]
+
+        prompt = f"""Refine this web app:
+
+Instruction: "{instruction}"
+
+Current files: {current_files}
+
+Generate ONLY the CHANGED file content.
+Return JSON: {{"file": "main.py or index.html", "content": "complete new file content"}}"""
+        raw = call_nvidia([{"role": "user", "content": prompt}], max_tokens=3000)
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not m:
+            return {"success": False, "error": "Refinement failed"}
+
+        try:
+            result = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            return {"success": False, "error": "Invalid JSON"}
+
+        fname = result.get("file")
+        content = result.get("content", "")
+        if fname and content:
+            (project_dir / fname).write_text(content, encoding="utf-8")
+            return {"success": True, "updated": fname, "app_name": app_name}
+        return {"success": False, "error": "No file returned"}
+
     def register_as_tool(self, registry):
         builder = self
 
         def build_saas(params: dict) -> dict:
+            """Legacy scaffold method."""
             name = params.get("name", "")
             description = params.get("description", "A SaaS application")
             features = params.get("features", ["auth", "dashboard"])
             if not name:
                 return {"success": False, "error": "Project name required"}
             return builder.scaffold_project(name, description, features)
+
+        def build_app(params: dict) -> dict:
+            """GitHub Spark style: NL → complete app."""
+            desc = params.get("description", "")
+            if not desc:
+                return {"success": False, "error": "Describe your app"}
+            return builder.build_from_description(desc, params.get("stack", "react-fastapi"))
+
+        def refine_app(params: dict) -> dict:
+            """Refine existing app with NL."""
+            return builder.refine_app(
+                params.get("app_name", ""),
+                params.get("instruction", "")
+            )
 
         registry.register(
             "build_saas",
@@ -315,4 +511,25 @@ Built with FastAPI + Tailwind CSS
                 "features": {"type": "list", "default": ["auth", "dashboard"]}
             },
             "generation"
+        )
+
+        # Spark-style tools
+        registry.register(
+            "build_app",
+            build_app,
+            "Build a complete web app from natural language description (GitHub Spark style). "
+            "Generates React+TypeScript frontend + FastAPI backend + deploys locally.",
+            {"description": {"type": "string", "required": True}},
+            "spark"
+        )
+
+        registry.register(
+            "refine_app",
+            refine_app,
+            "Refine an existing app with natural language: 'make header blue', 'add login'",
+            {
+                "app_name": {"type": "string", "required": True},
+                "instruction": {"type": "string", "required": True}
+            },
+            "spark"
         )

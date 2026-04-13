@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """Generation package - Content creation"""
 from .innovation_engine import InnovationEngine
 from .saas_builder import SaaSBuilder

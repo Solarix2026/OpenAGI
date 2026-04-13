@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """
 notification_hub.py — Multi-channel notification system
 

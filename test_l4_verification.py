@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """
 L4 Verification — 10 Test Prompts
 Run after all fixes to verify L4 readiness.

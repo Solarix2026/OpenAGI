@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """
 tool_executor.py — Tool execution engine
 
@@ -65,6 +69,21 @@ class ToolExecutor:
 
         reg.register("take_screenshot", self._take_screenshot,
             "Take a screenshot of the current screen", {})
+
+        # Perplexity-style research tools
+        reg.register("research_topic", self._research_topic,
+            "Deep research on any topic: web search + synthesis + report",
+            {"topic": {"type": "string", "required": True},
+             "depth": {"type": "string", "default": "standard"}})
+
+        reg.register("draft_document", self._draft_document,
+            "Draft professional documents: RFC, report, memo based on research",
+            {"document_type": {"type": "string", "required": True},
+             "topic": {"type": "string", "required": True}})
+
+        reg.register("investment_watchlist", self._investment_watchlist,
+            "Get AI investment watchlist: stock analysis, trends, top picks",
+            {"focus": {"type": "string", "default": "technology"}})
 
         return reg
 
@@ -325,3 +344,98 @@ class ToolExecutor:
             return {"success": True, "path": path}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def _research_topic(self, params: dict) -> dict:
+        """Deep research on any topic: web search + synthesis + structured report."""
+        from core.llm_gateway import call_nvidia
+        topic = params.get("topic", "")
+        depth = params.get("depth", "standard")
+        if not topic:
+            return {"success": False, "error": "No topic provided"}
+
+        # Step 1: Web search
+        search = self._websearch({"query": topic + " 2025 latest"})
+        raw_data = search.get("clean_summary", "")
+
+        # Step 2: NVIDIA synthesis
+        prompt = f"""Research synthesis for: "{topic}"
+Depth: {depth}
+Web data: {raw_data[:2000]}
+
+Write a structured research report:
+## Summary
+## Key Findings
+## Recent Developments
+## Analysis
+## Open Questions
+
+Be specific. Use data from web results."""
+        report = call_nvidia([{"role": "user", "content": prompt}], max_tokens=1500)
+
+        return {
+            "success": True,
+            "topic": topic,
+            "report": report,
+            "sources_searched": search.get("result_count", 0)
+        }
+
+    def _draft_document(self, params: dict) -> dict:
+        """Draft professional documents: RFC, report, memo, proposal."""
+        from core.llm_gateway import call_nvidia
+        from pathlib import Path
+
+        doc_type = params.get("document_type", "RFC")
+        topic = params.get("topic", "")
+        if not topic:
+            return {"success": False, "error": "No topic provided"}
+
+        # Research first
+        research = self._research_topic({"topic": topic})
+
+        # Draft document
+        prompt = f"""Write a professional {doc_type} for: {topic}
+
+Based on research: {research.get('report', '')[:1000]}
+
+Follow standard {doc_type} format. Be thorough and professional."""
+        doc = call_nvidia([{"role": "user", "content": prompt}], max_tokens=2000)
+
+        # Save to file
+        fname = f"workspace/{doc_type.lower()}_{topic[:20].replace(' ', '_')}.md"
+        Path(fname).write_text(doc, encoding="utf-8")
+
+        return {
+            "success": True,
+            "document": doc,
+            "saved_to": fname
+        }
+
+    def _investment_watchlist(self, params: dict) -> dict:
+        """Get AI investment watchlist: stock analysis, trends, top picks."""
+        from core.llm_gateway import call_nvidia
+        focus = params.get("focus", "technology")
+
+        # Search for stocks
+        search = self._websearch({"query": f"top {focus} stocks 2025 AI investment"})
+
+        prompt = f"""Create an AI investment watchlist for {focus} sector.
+
+Market data: {search.get('clean_summary', '')[:1500]}
+
+Format:
+## Top 10 Stocks to Watch
+| Stock | Ticker | Thesis | Risk | Timeframe |
+|...|...|...|...|...|
+
+## Macro Trend Analysis
+## Red Flags
+## Recommendation
+
+Disclaimer: Not financial advice. Educational only."""
+        report = call_nvidia([{"role": "user", "content": prompt}], max_tokens=1500)
+
+        return {
+            "success": True,
+            "watchlist": report,
+            "focus": focus
+        }

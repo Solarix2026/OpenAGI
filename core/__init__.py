@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """Core package - Brain + Memory"""
 from .kernel_impl import Kernel
 from .llm_gateway import call_nvidia, call_groq_router, call_groq, send_telegram_alert

@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """Agentic package - Workflow orchestration"""
 from .dag_workflow import DAGWorkflowEngine
 from .subagent_manager import SubagentManager

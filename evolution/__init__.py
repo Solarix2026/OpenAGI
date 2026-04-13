@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """Evolution package - Self-improvement"""
 from .metacognition import MetacognitiveEngine
 from .causal_engine import CausalEngine

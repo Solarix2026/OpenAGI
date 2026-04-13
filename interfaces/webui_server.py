@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """
 webui_server_v2.py — Desktop-class OpenClaw-style Web UI v2.0
 
@@ -412,7 +416,6 @@ class WebUIServer:
 
     async def _push_to_all(self, message: str):
         """Push message to all connected WebSocket clients."""
-        import copy
         dead = set()
         for ws in self._active_ws:
             try:
@@ -420,6 +423,19 @@ class WebUIServer:
             except Exception:
                 dead.add(ws)
         self._active_ws -= dead
+
+    def push_sync(self, message: str):
+        """Sync-safe push called from background threads."""
+        if not self._active_ws:
+            return
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    self._push_to_all(message), loop
+                )
+        except Exception as e:
+            log.debug(f"Push failed: {e}")
 
     def _push_dict_to_all(self, data: dict):
         """Push dict to all connected WebSocket clients."""
@@ -443,8 +459,8 @@ class WebUIServer:
         port = port or int(os.getenv("WEBUI_PORT", "8765"))
         app = FastAPI()
 
-        # Wire push function to kernel
-        self.kernel._webui_push = self._push_to_all
+        # Wire push function to kernel (use sync wrapper for thread safety)
+        self.kernel._webui_push = self.push_sync
 
         @app.get("/", response_class=HTMLResponse)
         async def index():

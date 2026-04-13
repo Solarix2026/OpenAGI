@@ -1,3 +1,7 @@
+# Copyright (c) 2026 HackerTMJ (门牌号3号)
+# OpenAGI — Autonomous Intelligence System
+# MIT License — https://github.com/HackerTMJ/OpenAGI
+
 """
 proactive_engine.py — Autonomous background intelligence (L4 Personalized)
 
@@ -25,6 +29,10 @@ class ProactiveEngine:
         self._last_chronos_check = 0
         self._briefing_buffer = []
         self._seen_events = set()
+
+        # Topic deduplication (24h cooldown)
+        self._notified_topics = {}
+        self._TOPIC_COOLDOWN = 86400
 
     def start(self):
         self._thread = threading.Thread(target=self._loop, daemon=True, name="ProactiveEngine")
@@ -193,3 +201,24 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
     def stop(self):
         self._stop.set()
         log.info("ProactiveEngine stopped")
+
+    # Topic Deduplication
+    def _topic_hash(self, text: str) -> str:
+        import hashlib
+        words = set(re.findall(r'\b\w{4,}\b', text.lower()))
+        key = " ".join(sorted(list(words))[:5])
+        return hashlib.md5(key.encode()).hexdigest()[:8]
+
+    def _is_duplicate_topic(self, text: str) -> bool:
+        h = self._topic_hash(text)
+        if h in self._notified_topics:
+            age = time.time() - self._notified_topics[h]
+            if age < self._TOPIC_COOLDOWN:
+                return True
+        return False
+
+    def _mark_notified(self, text: str):
+        self._notified_topics[self._topic_hash(text)] = time.time()
+        now = time.time()
+        self._notified_topics = {k: v for k, v in self._notified_topics.items()
+                                 if now - v < self._TOPIC_COOLDOWN * 2}
