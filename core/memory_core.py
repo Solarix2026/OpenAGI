@@ -275,3 +275,96 @@ class AgentMemory:
 
     def close(self):
         self._conn.close()
+
+
+    # ── Memory Compression ────────────────────────────────────────
+
+    def compress_episodic_to_semantic(self, since_hours=24) -> dict:
+        """
+        Called by CHRONOS_REVERIE nightly.
+        Compress recent episodic events into semantic summary nodes.
+        Reduces FAISS index: 500 episodic → ~50 semantic entries.
+        """
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(hours=since_hours)).isoformat()
+
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM episodic WHERE ts > ? ORDER BY ts DESC LIMIT 200",
+                (cutoff,)
+            ).fetchall()
+
+        if len(rows) < 5:
+            return {"compressed": 0, "reason": "not enough events"}
+
+        events = [dict(r) for r in rows]
+        events_text = "\n".join(
+            f"[{e['event_type']}] {e['content'][:80]}"
+            for e in events[:50]
+        )
+
+        # Use NVIDIA to compress
+        try:
+            from core.llm_gateway import call_nvidia
+            import json
+            import re
+
+            prompt = f"""Compress these agent events into 5-8 key knowledge nodes.
+Each node = one important fact/pattern worth remembering long-term.
+Discard: noise, duplicates, transient "how are you" exchanges.
+Keep: recurring patterns, capability usages, important user info.
+
+Events: {events_text}
+
+Return JSON: {{"nodes": [{{"summary": "...", "topic": "...", "importance": 0.0-1.0}}]}}"""
+
+            raw = call_nvidia([{"role": "user", "content": prompt}], max_tokens=500, fast=True)
+            m = re.search(r'\{.*\}', raw, re.DOTALL)
+            if not m:
+                return {"compressed": 0, "reason": "parse failed"}
+
+            nodes = json.loads(m.group(0)).get("nodes", [])
+
+            # Store semantic nodes
+            with self._lock:
+                for node in nodes:
+                    self._conn.execute(
+                        "INSERT INTO semantic_memory(summary,topic,importance,source_event_count,span_hours) VALUES(?,?,?,?,?)",
+                        (
+                            node["summary"][:500],
+                            node.get("topic", ""),
+                            node.get("importance", 0.5),
+                            len(events),
+                            since_hours
+                        )
+                    )
+                self._conn.commit()
+
+            log.info(f"[MEMORY] Compressed {len(events)} events → {len(nodes)} semantic nodes")
+            return {"compressed": len(nodes), "from_events": len(events)}
+
+        except Exception as e:
+            log.warning(f"Memory compression failed: {e}")
+            return {"compressed": 0, "error": str(e)}
+
+    def get_semantic_context(self, topic: str = None, limit: int = 3) -> str:
+        """Get compressed semantic memories matching topic."""
+        try:
+            with self._lock:
+                if topic:
+                    rows = self._conn.execute(
+                        "SELECT * FROM semantic_memory WHERE topic LIKE ? ORDER BY importance DESC LIMIT ?",
+                        (f"%{topic}%", limit)
+                    ).fetchall()
+                else:
+                    rows = self._conn.execute(
+                        "SELECT * FROM semantic_memory ORDER BY ts DESC LIMIT ?",
+                        (limit,)
+                    ).fetchall()
+
+            if rows:
+                snippets = [r["summary"][:120] for r in rows]
+                return "Long-term: " + " | ".join(snippets)
+        except Exception:
+            pass
+        return ""
