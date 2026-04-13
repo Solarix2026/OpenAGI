@@ -78,7 +78,7 @@ class RecipeEngine:
                     prompt = rendered.get("prompt", "")
                     result_text = call_nvidia([{"role": "user", "content": prompt}], max_tokens=rendered.get("max_tokens", 500))
                     result = {"success": True, "text": result_text}
-                elif step_type == "set":
+                elif step_type == "recipe":\n                # Subrecipe: call another recipe\n                sub_name = rendered.get("recipe")\n                sub_params = rendered.get("params", {})\n                # Merge parent context into subrecipe params\n                merged_params = {**(variables or {}), **sub_params, **step_results}\n                result = self.execute_subrecipe(sub_name, executor, merged_params, step_results)\n            elif step_type == "set":
                     # Set a variable directly
                     ctx[step_id] = rendered.get("value", "")
                     result = {"success": True, "value": ctx[step_id]}
@@ -220,3 +220,46 @@ class RecipeEngine:
             pass
         return False
 
+
+
+    def execute_recipe_with_error_handling(self, name: str, executor, variables: dict = None, parent_ctx: dict = None) -> dict:
+        """
+        Execute recipe with error path support.
+        Calls execute_recipe and runs on_error steps if failure.
+        """
+        result = self.execute_recipe(name, executor, variables)
+        if result.get("success"):
+            return result
+
+        # Handle error
+        recipe = self.get_recipe(name)
+        error_steps = recipe.get("on_error", [])
+        if error_steps:
+            error_ctx = {
+                "error": result.get("error", ""),
+                "failed_step": result.get("steps", [])[:-1] if result.get("steps") else [],
+                "variables": variables
+            }
+            if parent_ctx:
+                error_ctx.update(parent_ctx)
+
+            log.info(f"[RECIPE] Running {len(error_steps)} error handlers for {name}")
+            for i, err_step in enumerate(error_steps):
+                rendered = self._render_step(err_step, error_ctx, {})
+                try:
+                    if rendered.get("type") == "notify":
+                        msg = rendered.get("message", "Recipe failed")
+                        log.warning(f"[RECIPE ERROR] {msg}")
+                except Exception as e:
+                    log.error(f"Error handler failed: {e}")
+
+        return result
+
+    def execute_subrecipe(self, sub_name: str, executor, params: dict = None, parent_ctx: dict = None) -> dict:
+        """
+        Execute a sub-recipe with merged context from parent.
+        Subrecipes can call other recipes.
+        """
+        merged_params = {**(parent_ctx or {}), **(params or {})}
+        log.info(f"[SUBRECIPE] {sub_name} called with {len(merged_params)} params")
+        return self.execute_recipe_with_error_handling(sub_name, executor, merged_params, parent_ctx)
