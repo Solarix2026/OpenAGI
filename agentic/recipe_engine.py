@@ -1,10 +1,11 @@
 """
-recipe_engine.py — YAML-based skill execution
+recipe_engine.py — YAML-based skill execution v2.0
 
 Load YAML from ./skills/. Jinja2 template all {{ vars }}.
 Steps: type=tool → executor.execute(). type=llm → call_nvidia().
 Pass step output as context to next step via {{ step_id.field }}.
-recipe_to_tool(name, executor): wrap recipe as callable tool in registry.
+
+New v2.0: Subrecipes, triggers, error handling
 """
 import yaml
 import json
@@ -40,7 +41,7 @@ class RecipeEngine:
     def get_recipe(self, name: str) -> dict | None:
         """Get a recipe by name."""
         if name not in self._recipes:
-            self._load_all()  # Try reload
+            self._load_all()
         return self._recipes.get(name)
 
     def list_recipes(self) -> list[str]:
@@ -66,7 +67,6 @@ class RecipeEngine:
             step_id = step.get("id", f"step_{i}")
             step_type = step.get("type", "tool")
 
-            # Render any Jinja2 templates in step config
             rendered = self._render_step(step, variables, step_results)
 
             try:
@@ -78,8 +78,13 @@ class RecipeEngine:
                     prompt = rendered.get("prompt", "")
                     result_text = call_nvidia([{"role": "user", "content": prompt}], max_tokens=rendered.get("max_tokens", 500))
                     result = {"success": True, "text": result_text}
-                elif step_type == "recipe":\n                # Subrecipe: call another recipe\n                sub_name = rendered.get("recipe")\n                sub_params = rendered.get("params", {})\n                # Merge parent context into subrecipe params\n                merged_params = {**(variables or {}), **sub_params, **step_results}\n                result = self.execute_subrecipe(sub_name, executor, merged_params, step_results)\n            elif step_type == "set":
-                    # Set a variable directly
+                elif step_type == "recipe":
+                    # Subrecipe: call another recipe
+                    sub_name = rendered.get("recipe")
+                    sub_params = rendered.get("params", {})
+                    merged_params = {**(variables or {}), **sub_params, **step_results}
+                    result = self.execute_subrecipe(sub_name, executor, merged_params, step_results)
+                elif step_type == "set":
                     ctx[step_id] = rendered.get("value", "")
                     result = {"success": True, "value": ctx[step_id]}
                 else:
@@ -101,18 +106,15 @@ class RecipeEngine:
         import copy
         rendered = copy.deepcopy(step)
 
-        # Build context from variables + previous step results
         ctx = {}
         if variables:
             ctx.update(variables)
         for step_id, result in step_results.items():
             ctx[step_id] = result
-            # Also make result fields accessible as step_id.field
             if isinstance(result, dict):
                 for key, val in result.items():
                     ctx[f"{step_id}.{key}"] = val
 
-        # Render all string values
         def render_obj(obj):
             if isinstance(obj, str):
                 try:
@@ -147,12 +149,53 @@ class RecipeEngine:
 
     # ── Subrecipe Support ───────────────────────────────────────────
 
+    def execute_subrecipe(self, sub_name: str, executor, params: dict = None, parent_ctx: dict = None) -> dict:
+        """
+        Execute a sub-recipe with merged context from parent.
+        Subrecipes can call other recipes.
+        """
+        merged_params = {**(parent_ctx or {}), **(params or {})}
+        log.info(f"[SUBRECIPE] {sub_name} called with {len(merged_params)} params")
+        return self.execute_recipe_with_error_handling(sub_name, executor, merged_params, parent_ctx)
+
+    def execute_recipe_with_error_handling(self, name: str, executor, variables: dict = None, parent_ctx: dict = None) -> dict:
+        """
+        Execute recipe with error path support.
+        """
+        result = self.execute_recipe(name, executor, variables)
+        if result.get("success"):
+            return result
+
+        recipe = self.get_recipe(name)
+        error_steps = recipe.get("on_error", [])
+        if error_steps:
+            error_ctx = {
+                "error": result.get("error", ""),
+                "failed_step": result.get("steps", [])[:-1] if result.get("steps") else [],
+                "variables": variables
+            }
+            if parent_ctx:
+                error_ctx.update(parent_ctx)
+
+            log.info(f"[RECIPE] Running {len(error_steps)} error handlers for {name}")
+            for err_step in error_steps:
+                rendered = self._render_step(err_step, error_ctx, {})
+                try:
+                    if rendered.get("type") == "notify":
+                        msg = rendered.get("message", "Recipe failed")
+                        log.warning(f"[RECIPE ERROR] {msg}")
+                except Exception as e:
+                    log.error(f"Error handler failed: {e}")
+
+        return result
+
+    # ── Trigger Support ─────────────────────────────────────────────
+
     def _load_triggers(self) -> dict:
         """Load trigger recipes from meta_knowledge."""
         if not self.memory:
             return {}
         try:
-            from core.memory_core import AgentMemory
             meta = self.memory.get_meta_knowledge("recipe_triggers")
             return meta.get("content", {}) if meta else {}
         except Exception:
@@ -167,8 +210,8 @@ class RecipeEngine:
         """
         Register a trigger for automatic recipe execution.
         trigger = {
-            "type": "cron",  # "cron", "event", "webhook"
-            "schedule": "0 8 * * *",  # 8am daily (cron)
+            "type": "cron",
+            "schedule": "0 8 * * *",
             "event": "user_idle_30min",
             "webhook_url": "..."
         }
@@ -177,36 +220,18 @@ class RecipeEngine:
         self._save_triggers(self._triggers)
         log.info(f"[TRIGGER] Registered {recipe_name}: {trigger}")
 
-    def unregister_trigger(self, recipe_name: str):
-        """Remove a trigger."""
-        if recipe_name in self._triggers:
-            del self._triggers[recipe_name]
-            self._save_triggers(self._triggers)
-
     def check_and_fire_triggers(self, executor, memory) -> list:
-        """
-        Called by ProactiveEngine every cycle.
-        Returns list of fired triggers.
-        """
-        import schedule
+        """Called by ProactiveEngine every cycle."""
         from datetime import datetime
-        from core.goal_persistence import add_to_goal_queue
-
         fired = []
         for recipe_name, trigger in self._triggers.items():
             if trigger.get("type") == "cron":
-                # Check if cron schedule matches current time
                 cron = trigger.get("schedule", "")
                 if self._cron_matches(cron, datetime.now()):
-                    # Execute recipe
                     result = self.execute_recipe(recipe_name, executor, {})
                     if result.get("success"):
                         fired.append(recipe_name)
                         log.info(f"[TRIGGER] Fired {recipe_name} at {datetime.now()}")
-            elif trigger.get("type") == "event":
-                # Event-based triggers handled by ProactiveEngine
-                pass
-
         return fired
 
     def _cron_matches(self, cron: str, dt: datetime) -> bool:
@@ -219,47 +244,3 @@ class RecipeEngine:
         except Exception:
             pass
         return False
-
-
-
-    def execute_recipe_with_error_handling(self, name: str, executor, variables: dict = None, parent_ctx: dict = None) -> dict:
-        """
-        Execute recipe with error path support.
-        Calls execute_recipe and runs on_error steps if failure.
-        """
-        result = self.execute_recipe(name, executor, variables)
-        if result.get("success"):
-            return result
-
-        # Handle error
-        recipe = self.get_recipe(name)
-        error_steps = recipe.get("on_error", [])
-        if error_steps:
-            error_ctx = {
-                "error": result.get("error", ""),
-                "failed_step": result.get("steps", [])[:-1] if result.get("steps") else [],
-                "variables": variables
-            }
-            if parent_ctx:
-                error_ctx.update(parent_ctx)
-
-            log.info(f"[RECIPE] Running {len(error_steps)} error handlers for {name}")
-            for i, err_step in enumerate(error_steps):
-                rendered = self._render_step(err_step, error_ctx, {})
-                try:
-                    if rendered.get("type") == "notify":
-                        msg = rendered.get("message", "Recipe failed")
-                        log.warning(f"[RECIPE ERROR] {msg}")
-                except Exception as e:
-                    log.error(f"Error handler failed: {e}")
-
-        return result
-
-    def execute_subrecipe(self, sub_name: str, executor, params: dict = None, parent_ctx: dict = None) -> dict:
-        """
-        Execute a sub-recipe with merged context from parent.
-        Subrecipes can call other recipes.
-        """
-        merged_params = {**(parent_ctx or {}), **(params or {})}
-        log.info(f"[SUBRECIPE] {sub_name} called with {len(merged_params)} params")
-        return self.execute_recipe_with_error_handling(sub_name, executor, merged_params, parent_ctx)
