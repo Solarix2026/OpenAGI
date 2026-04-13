@@ -34,7 +34,8 @@
       "Bash(where python:*)",
       "Bash(ls -la venv/Scripts/activate*)",
       "Bash(venv\\\\Scripts\\\\python.exe -c \"import fastapi; print\\('fastapi OK'\\)\")",
-      "Bash(ls venv/Scripts/*.exe)"
+      "Bash(ls venv/Scripts/*.exe)",
+      "Bash(git checkout:*)"
     ]
   }
 }
