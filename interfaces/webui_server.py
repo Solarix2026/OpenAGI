@@ -251,12 +251,17 @@ HTML_V2 = """<!DOCTYPE html>
         }
 
         function formatMessage(text) {
-            return text
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/\`{3}(\w+)?\n([\s\S]*?)\`{3}/g, '<pre class="bg-gray-950 p-3 rounded-lg overflow-x-auto mt-2"><code>$2</code></pre>')
-                .replace(/\`([^`]+)\`/g, '<code class="bg-gray-950 px-1.5 py-0.5 rounded text-agi-400">$1</code>')
-                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-                .replace(/\n/g, '<br>');
+            if (!text) return '';
+            let html = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // Code blocks
+            html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-gray-950 p-3 rounded-lg overflow-x-auto mt-2"><code>$2</code></pre>');
+            // Inline code
+            html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-950 px-1.5 py-0.5 rounded text-agi-400">$1</code>');
+            // Bold
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            // Line breaks
+            html = html.replace(/\n/g, '<br>');
+            return html;
         }
 
         function sendMessage() {
