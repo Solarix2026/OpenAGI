@@ -1,0 +1,81 @@
+# OpenAGI v5.3 - Declarative Pattern Configuration
+# Used for personal fact extraction from user input
+# Pattern: [pattern, type, priority]
+
+patterns:
+  # English patterns - high confidence
+  - pattern: "my name is"
+    type: "name"
+    priority: 1.0
+    extract_regex: "(?:my name is|call me|you can call me)\\s+([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)*)"
+
+  - pattern: "i am "
+    type: "identity"
+    priority: 0.8
+    extract_regex: "(?:i am|i'm)\\s+([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)*)"
+
+  - pattern: "i work "
+    type: "job"
+    priority: 0.9
+    extract_regex: "(?:i work (?:at|for|as)|i am a|i'm a)\\s+(.+?)(?:\\.|,|$)"
+
+  - pattern: "i live in"
+    type: "location"
+    priority: 0.9
+    extract_regex: "(?:i live in|i'm from|i'm in)\\s+(.+?)(?:\\.|,|$)"
+
+  - pattern: "call me "
+    type: "name"
+    priority: 1.0
+    extract_regex: "(?:call me|you can call me)\\s+([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+)*)"
+
+  - pattern: "i'm from"
+    type: "location"
+    priority: 0.8
+    extract_regex: "(?:i'm from)\\s+(.+?)(?:\\.|,|$)"
+
+  - pattern: "i have "
+    type: "possession"
+    priority: 0.6
+    extract_regex: null  # Use LLM for complex extraction
+
+  # Chinese patterns
+  - pattern: "我叫"
+    type: "name"
+    priority: 1.0
+    extract_regex: "(?:我叫|你可以叫我)\\s*(.{2,8})"
+
+  - pattern: "我是"
+    type: "identity"
+    priority: 0.8
+    extract_regex: null  # Use LLM
+
+  - pattern: "我在"
+    type: "location"
+    priority: 0.8
+    extract_regex: "(?:我在)\\s*(.+?)(?:\\.|,|工作|读书)"
+
+  - pattern: "我来自"
+    type: "location"
+    priority: 0.9
+    extract_regex: "(?:我来自)\\s*(.+?)(?:\\.|,|。)"
+
+  - pattern: "我住在"
+    type: "location"
+    priority: 0.9
+    extract_regex: "(?:我住在)\\s*(.+?)(?:\\.|,|。)"
+
+categories:
+  # LLM fallback categories for when patterns don't match
+  # but the input might still contain personal facts
+  - name
+  - job
+  - location
+  - preference
+  - relationship
+
+# Minimum confidence threshold for LLM extraction
+llm_confidence_threshold: 0.7
+
+# Extraction strategy: pattern_only, llm_only, hybrid
+extraction_strategy: hybrid

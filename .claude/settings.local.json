@@ -39,7 +39,9 @@
       "Bash(curl -s http://192.168.68.103:8765/)",
       "Bash(xxd)",
       "Bash(find .:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(ls:*)",
+      "Bash(chcp 65001:*)"
     ]
   }
 }

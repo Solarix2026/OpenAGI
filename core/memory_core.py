@@ -132,21 +132,21 @@ class AgentMemory:
                     results.append(r)
         return results[:limit]
 
-    def get_relevant_memory_context(self, query: str, threshold: float = 0.4) -> str:
+    def get_relevant_memory_context(self, query: str, threshold: float = 0.4, top_n: int = 5) -> str:
         """SMART memory injection: only high-relevance memories, compressed."""
         if not query or len(query.strip()) < 3:
             return ""
         # Try vector search first
         relevant = []
         try:
-            results = self._vector_search(query, limit=5)
+            results = self._vector_search(query, limit=top_n)
             # Filter by importance and relevance
             relevant = [r for r in results if r.get("importance", 0.5) > threshold]
         except Exception:
             pass
-        # Fallback: recent 2 events if no vector results
+        # Fallback: recent events if no vector results
         if not relevant:
-            recent = self.get_recent_timeline(limit=2)
+            recent = self.get_recent_timeline(limit=top_n)
             relevant = [r for r in recent if r.get("event_type") == "user_message"]
         if not relevant:
             return ""

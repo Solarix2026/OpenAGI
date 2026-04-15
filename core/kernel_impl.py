@@ -84,6 +84,14 @@ class Kernel:
         self.semantic = SemanticEngine(self.executor.registry)
         self.history = []
 
+        # Config loader for hybrid extraction
+        try:
+            from core.config_loader import get_config_loader
+            self.config_loader = get_config_loader()
+            log.info("ConfigLoader initialized")
+        except ImportError:
+            self.config_loader = None
+
         # User context (geo + weather)
         try:
             from core.user_context import UserContextProvider
@@ -166,6 +174,14 @@ class Kernel:
 
         # ── Autonomy tier ────────────────────────────────────────
         try:
+            from core.goal_alignment_monitor import GoalAlignmentMonitor
+            self.alignment = GoalAlignmentMonitor(self)
+            log.info("🎯 GoalAlignmentMonitor ready")
+        except ImportError as e:
+            log.warning(f"Goal alignment monitor not available: {e}")
+            self.alignment = None
+
+        try:
             from autonomy.will_engine import WillEngine
             self.will = WillEngine(self.memory, self.executor.registry, lambda d,p,s: add_to_goal_queue(d,p,s,self.memory))
         except ImportError:
@@ -223,6 +239,25 @@ class Kernel:
             self.inventor.register_as_tool(self.executor.registry)
         except ImportError:
             self.inventor = None
+
+        # ── Generation tier (Skills, Finance) ───────────────────
+        try:
+            from generation.skill_inventor import SkillInventor
+            self.skill_inventor = SkillInventor()
+            self.skill_inventor.register_as_tool(self.executor.registry)
+            log.info("🎨 SkillInventor registered")
+        except ImportError as e:
+            log.debug(f"SkillInventor not available: {e}")
+            self.skill_inventor = None
+
+        try:
+            from generation.finance_engine import FinanceEngine
+            self.finance = FinanceEngine()
+            self.finance.register_as_tool(self.executor.registry)
+            log.info("📈 FinanceEngine registered")
+        except ImportError as e:
+            log.debug(f"FinanceEngine not available: {e}")
+            self.finance = None
 
         # ── Agentic workflow tier ────────────────────────────────
         try:
@@ -358,7 +393,17 @@ class Kernel:
         # Proactive thread
         self._proactive_thread = None
 
-        log.info("✅ OpenAGI Kernel v5.0 ready")
+        # Agentic RAG for intelligent memory retrieval
+        try:
+            from core.agentic_rag import AgenticMemoryRAG
+            from core.llm_gateway import call_nvidia
+            self._agentic_rag = AgenticMemoryRAG(self.memory, call_nvidia)
+            log.info("🧠 Agentic RAG initialized")
+        except Exception as e:
+            log.warning(f"Agentic RAG not available: {e}")
+            self._agentic_rag = None
+
+        log.info("✅ OpenAGI Kernel v5.4 ready")
         log.info(f"   Tools: {self.executor.registry.list_tools()}")
 
     # ── Main process() ─────────────────────────────────────────────────
@@ -378,13 +423,39 @@ class Kernel:
 
         self.memory.log_event("user_message", user_input, importance=0.6)
 
+        # ── 0. Auto-extract and store personal facts ──────────────────
+        # Hybrid: Pattern matching + LLM extraction for declarative statements
+        # Config loader cached in __init__ for performance
+        if self.config_loader:
+            from core.llm_gateway import call_nvidia as _call_nvidia
+            extracted_facts = self.config_loader.extract_facts(user_input, _call_nvidia)
+            for fact in extracted_facts:
+                self._store_fact_from_config(fact, user_input)
+
         # ── 1. Check for pending clarification reply ─────────────────
         pending = self.memory.get_meta_knowledge("pending_clarification")
         if pending and pending.get("content", {}).get("original"):
+            question = pending["content"].get("question", "")
             original = pending["content"]["original"]
-            user_input = f"{original}. Additional context: {user_input}"
+
+            # Heuristic: is this a new command/action (not an answer)?
+            is_action = any(user_input.lower().startswith(w) for w in [
+                "open ", "go to", "search", "find", "show", "run", "execute",
+                "build", "create", "write", "delete", "list", "get", "fetch",
+                "morning", "status", "evolve", "innovate", "/mode",
+                "打开", "搜索", "建立", "展示", "运行"
+            ])
+
+            if not is_action and len(user_input.split()) <= 12:
+                # Likely an answer to clarification - merge context
+                user_input = f"{original}. Additional context: {user_input}"
+                log.info(f"[CLARIFY] Merged: {user_input[:80]}")
+            else:
+                # New command - clear pending, use input as-is
+                log.info(f"[CLARIFY] Cleared (new action): {user_input[:50]}")
+
+            # ALWAYS clear pending clarification
             self.memory.update_meta_knowledge("pending_clarification", {})
-            log.info(f"[CLARIFY] Merged input: {user_input[:80]}")
 
         # ── 2. Intent classification + context fetch (PARALLEL) ─────
         import concurrent.futures
@@ -536,6 +607,23 @@ class Kernel:
         if mem_ctx:
             system += f"\n\n{mem_ctx}"
 
+        # Inject stored user facts into system prompt
+        try:
+            user_name = self.memory.get_meta_knowledge("user_name")
+            if user_name and user_name.get("content"):
+                name = user_name["content"]
+                system += f"\n\nUSER FACT: The user's name is {name}. Use their name naturally in responses."
+            user_job = self.memory.get_meta_knowledge("user_job")
+            if user_job and user_job.get("content"):
+                job = user_job["content"]
+                system += f"\nUSER FACT: They work as/at: {job}."
+            user_location = self.memory.get_meta_knowledge("user_location")
+            if user_location and user_location.get("content"):
+                location = user_location["content"]
+                system += f"\nUSER FACT: They are located in: {location}."
+        except Exception:
+            pass
+
         messages = [{"role": "system", "content": system}]
         messages += history
         messages.append({"role": "user", "content": user_input})
@@ -597,8 +685,84 @@ class Kernel:
 
     # ── Helpers ─────────────────────────────────────────────────────
 
+    def _store_fact_from_config(self, fact: dict, original_text: str) -> None:
+        """Store a fact extracted from config_loader."""
+        fact_type = fact.get("type")
+        value = fact.get("value", "").strip()
+        method = fact.get("method", "unknown")
+
+        if not value:
+            return
+
+        # Map fact types to meta_knowledge keys
+        META_KEYS = {
+            "name": ("user_name", "user_fact"),
+            "job": ("user_job", "user_fact"),
+            "location": ("user_location", "user_fact"),
+            "preference": ("user_preference", "user_fact"),
+            "identity": ("user_identity", "user_fact"),
+        }
+
+        meta_key, event_type = META_KEYS.get(fact_type, (f"user_{fact_type}", "user_fact"))
+        importance = 0.9 if fact_type == "name" else 0.8 if fact_type == "job" else 0.7
+
+        self.memory.update_meta_knowledge(meta_key, value)
+        self.memory.log_event(
+            event_type,
+            f"user {fact_type}: {value} (via {method})",
+            importance=importance
+        )
+        log.info(f"[MEMORY] Stored user {fact_type} ({method}): {value}")
+
+    def _store_personal_fact(self, text: str) -> None:
+        """Extract and persist personal facts from declarative statements."""
+        import re
+        # Name patterns - capture full names like "Tan Ming Jing"
+        name_m = re.search(r"(?:my name is|call me|you can call me|i'm|i am)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)", text, re.I)
+        if name_m:
+            name = name_m.group(1).strip()
+            self.memory.update_meta_knowledge("user_name", name)
+            self.memory.log_event("user_fact", f"user name: {name}", importance=0.9)
+            log.info(f"[MEMORY] Stored user name: {name}")
+            return
+        # Job patterns
+        job_m = re.search(r"(?:i work (?:at|for|as)|i am a|i'm a)\s+(.+?)(?:\.|,|$)", text, re.I)
+        if job_m:
+            job = job_m.group(1).strip()
+            self.memory.update_meta_knowledge("user_job", job)
+            self.memory.log_event("user_fact", f"user job: {job}", importance=0.8)
+            log.info(f"[MEMORY] Stored user job: {job}")
+            return
+        # Location patterns
+        loc_m = re.search(r"(?:i live in|i'm from|i'm in)\s+(.+?)(?:\.|,|$)", text, re.I)
+        if loc_m:
+            location = loc_m.group(1).strip()
+            self.memory.update_meta_knowledge("user_location", location)
+            self.memory.log_event("user_fact", f"user location: {location}", importance=0.7)
+            log.info(f"[MEMORY] Stored user location: {location}")
+        # Chinese name patterns
+        cn_name_m = re.search(r"(?:我叫|你可以叫我)\s+(.{2,8})?", text)
+        if cn_name_m:
+            name = cn_name_m.group(1).strip()
+            self.memory.update_meta_knowledge("user_name", name)
+            self.memory.log_event("user_fact", f"user name (cn): {name}", importance=0.9)
+            log.info(f"[MEMORY] Stored user name: {name}")
+
     def _get_memory_ctx(self, query: str) -> str:
-        """Smart memory injection with relevance filtering."""
+        """Smart memory injection with Agentic RAG."""
+        # Use Agentic RAG if available (v5.4+)
+        if hasattr(self, '_agentic_rag') and self._agentic_rag:
+            try:
+                context, meta = self._agentic_rag.retrieve(
+                    query,
+                    max_budget_ms=200 if self.mode and str(self.mode.current) == "conversation" else 100
+                )
+                if context:
+                    return context
+            except Exception as e:
+                log.debug(f"Agentic RAG failed, falling back: {e}")
+
+        # Fallback to legacy retrieval
         return self.memory.get_relevant_memory_context(query)
 
     def _update_history(self, user_input: str, response: str):
@@ -656,6 +820,15 @@ class Kernel:
         log.info("📱 Telegram mode started")
         send_telegram_alert("✅ OpenAGI online. Send me a message.")
 
+        # Initialize call mode for voice messages
+        try:
+            from interfaces.call_mode import CallMode
+            call_mode = CallMode(self)
+            log.info("📞 CallMode initialized")
+        except ImportError as e:
+            log.debug(f"CallMode not available: {e}")
+            call_mode = None
+
         offset = None
         while True:
             try:
@@ -663,6 +836,19 @@ class Kernel:
                 for update in updates:
                     offset = update["update_id"] + 1
                     msg = update.get("message", {})
+
+                    # Handle voice messages
+                    if msg.get("voice") and call_mode:
+                        file_id = msg["voice"]["file_id"]
+                        send_telegram_alert("🎤 Processing voice message...")
+                        try:
+                            response = call_mode.process_voice_message(file_id)
+                            send_telegram_alert(response[:4000])
+                        except Exception as e:
+                            log.error(f"Voice processing error: {e}")
+                            send_telegram_alert(f"Voice processing failed: {str(e)[:200]}")
+                        continue
+
                     text = msg.get("text", "").strip()
                     if text:
                         log.info(f"[TG] Received: {text[:60]}")

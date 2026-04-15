@@ -51,8 +51,8 @@ EXAMPLES:
 "打开浏览器搜索AI新闻" → {{"intent":"action","action":"websearch","parameters":{{"query":"AI最新新闻"}},"confidence":0.95}}
 "what's happening in the world" → {{"intent":"action","action":"world_events","parameters":{{}},"confidence":0.9}}
 "how are you" → {{"intent":"conversation","confidence":0.99}}
-"morning briefing" → {{"intent":"action","action":"morning_briefing","parameters":{{}},"confidence":0.99}}
-"给我早上简报" → {{"intent":"action","action":"morning_briefing","parameters":{{}},"confidence":0.99}}
+"morning briefing" → {{"intent":"action","action":"morning_brief","parameters":{{}},"confidence":0.99}}
+"给我早上简报" → {{"intent":"action","action":"morning_brief","parameters":{{}},"confidence":0.99}}
 "what can you do" → {{"intent":"action","action":"system_status","parameters":{{}},"confidence":0.95}}
 "evolve yourself" → {{"intent":"action","action":"run_evolution","parameters":{{}},"confidence":0.9}}
 "innovate on X" → {{"intent":"action","action":"run_innovation","parameters":{{"problem":"X"}},"confidence":0.9}}

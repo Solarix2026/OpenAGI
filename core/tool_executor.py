@@ -21,10 +21,11 @@ log = logging.getLogger("ToolExecutor")
 
 
 class ToolExecutor:
-    def __init__(self, workspace: str = "./workspace", memory=None):
+    def __init__(self, workspace: str = "./workspace", memory=None, metacognitive=None):
         self.workspace = Path(workspace)
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.memory = memory
+        self.meta = metacognitive  # MetacognitiveEngine for capability feedback
         self.registry = self._build_registry()
 
     def _build_registry(self):
@@ -95,6 +96,8 @@ class ToolExecutor:
         result = self.registry.execute(action, params)
 
         elapsed = int((time.time() - t0) * 1000)
+
+        # Log to memory
         if self.memory:
             self.memory.log_tool_outcome(
                 tool=action,
@@ -103,6 +106,24 @@ class ToolExecutor:
                 success=result.get("success", False),
                 duration_ms=elapsed
             )
+
+        # Capability feedback loop: update capability scores based on outcome
+        # Gap 6 fix: every tool execution feeds back to capability matrix
+        if self.meta and result:
+            try:
+                dim = self.meta.infer_dimension_from_tool(action)
+                if dim:
+                    delta = +0.02 if result.get("success") else -0.05  # Success=small gain, fail=more penalty
+                    old_val = self.meta._matrix.get(dim, 1.0)
+                    new_val = max(0.1, min(5.0, old_val + delta))  # Clamp 0.1-5.0
+                    self.meta._matrix[dim] = new_val
+
+                    # Log significant changes
+                    if abs(delta) > 0.01:
+                        log.info(f"[META] Capability {dim}: {old_val:.2f} → {new_val:.2f} ({result.get('success')})")
+            except Exception as e:
+                log.debug(f"Capability feedback failed: {e}")
+
         return result
 
     # ── Tool implementations ────────────────────────────────────
