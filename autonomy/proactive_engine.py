@@ -29,6 +29,7 @@ class ProactiveEngine:
         self._last_chronos_check = 0
         self._briefing_buffer = []
         self._seen_events = set()
+        self._startup_time = time.time()  # Grace period to avoid immediate nudges
 
         # Topic deduplication (24h cooldown)
         self._notified_topics = {}
@@ -49,15 +50,15 @@ class ProactiveEngine:
             self._stop.wait(300)
 
     def _get_idle_minutes(self) -> float:
-        """Check how long user has been idle."""
+        """Check how long user has been idle. Returns 0 if no history (not idle yet)."""
         recent = self.k.memory.get_recent_timeline(limit=1)
         if not recent:
-            return 9999.0
+            return 0.0  # No activity history = just started, not idle
         try:
             last = datetime.fromisoformat(recent[0]["ts"].replace("Z", ""))
             return (datetime.now() - last).total_seconds() / 60
         except:
-            return 9999.0
+            return 0.0
 
     def _detect_user_language(self) -> str:
         """Detect if user prefers Chinese or English."""
@@ -165,8 +166,9 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
             except Exception as e:
                 log.debug(f"Will cycle error: {e}")
 
-        # ── Habit nudge (only when idle > 45min) ─────────────────
-        if self.k.habits and idle_mins > 45 and (now - self._last_habit_check) > 3600:
+        # ── Habit nudge (only when idle > 45min, but not within 5min of startup) ─────────────────
+        startup_grace = (time.time() - self._startup_time) > 300  # 5 minute grace period
+        if self.k.habits and idle_mins > 45 and (now - self._last_habit_check) > 3600 and startup_grace:
             try:
                 prediction = self.k.habits.predict_next_need()
                 if prediction:

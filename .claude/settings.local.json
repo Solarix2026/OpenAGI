@@ -41,7 +41,8 @@
       "Bash(find .:*)",
       "Bash(xargs grep:*)",
       "Bash(ls:*)",
-      "Bash(chcp 65001:*)"
+      "Bash(chcp 65001:*)",
+      "Bash(git merge:*)"
     ]
   }
 }

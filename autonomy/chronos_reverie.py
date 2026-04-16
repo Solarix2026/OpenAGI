@@ -57,7 +57,8 @@ class ChronosReverie:
         """Full nightly review cycle. Returns summary dict."""
         from core.llm_gateway import send_telegram_alert
         results = {}
-        send_telegram_alert("🌙 *CHRONOS_REVERIE starting...*")
+        # Disabled status update - too noisy. Summary will be sent at end instead.
+        # send_telegram_alert("🌙 *CHRONOS_REVERIE starting...*")
 
         # Step 1: Dialectic review on recent failures
         if self.kernel.will:

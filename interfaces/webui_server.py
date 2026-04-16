@@ -115,7 +115,7 @@ html,body{height:100vh;overflow:hidden;background:var(--bg);color:var(--text);fo
 .modal-overlay.open{display:flex}
 .modal-box{background:rgba(15,23,42,.97);border:1px solid var(--border-bright);border-radius:18px;width:100%;max-width:440px;margin:16px;overflow:hidden}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
-.modal-body{padding:20px}
+.modal-body{padding:20px;max-height:70vh;overflow-y:auto}
 .form-label{font-size:11.5px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;display:block}
 .form-row{margin-bottom:18px}
 .mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
@@ -419,6 +419,15 @@ class WebUIServer:
         async def index():
             return HTML_V3
 
+        @self.app.get("/health")
+        async def health():
+            """Health check endpoint for debugging connection issues."""
+            return {
+                "status": "ok",
+                "kernel": "ready" if self.kernel else "not_initialized",
+                "ws_clients": len(self._active_ws)
+            }
+
         @self.app.get("/api/status")
         async def status():
             tools = self.kernel.executor.registry.list_tools() if self.kernel else []
@@ -626,32 +635,63 @@ class WebUIServer:
 
         @self.app.websocket("/ws")
         async def ws_endpoint(ws: WebSocket):
-            await ws.accept()
-            self._active_ws.add(ws)
             try:
-                while True:
-                    raw = await ws.receive_text()
-                    data = json.loads(raw)
-                    if data.get("type") == "message":
-                        text = data.get("text", "").strip()
-                        if not text:
-                            continue
-                        await ws.send_json({"type": "thinking"})
-                        loop = asyncio.get_event_loop()
+                await ws.accept()
+                log.info("[WS] Client connected")
+                self._active_ws.add(ws)
+                try:
+                    while True:
                         try:
-                            response = await asyncio.wait_for(
-                                loop.run_in_executor(None, self.kernel.process, text),
-                                timeout=120
-                            )
-                            await ws.send_json({"type": "response", "text": response})
-                        except asyncio.TimeoutError:
-                            await ws.send_json({"type": "response", "text": "Request timed out after 120s."})
-                        except Exception as ex:
-                            await ws.send_json({"type": "response", "text": f"Error: {str(ex)[:200]}"})
-            except WebSocketDisconnect:
-                pass
-            finally:
-                self._active_ws.discard(ws)
+                            raw = await ws.receive_text()
+                        except Exception as e:
+                            log.debug(f"[WS] receive_text failed: {e}")
+                            break
+
+                        try:
+                            data = json.loads(raw)
+                        except json.JSONDecodeError:
+                            log.warning(f"[WS] Invalid JSON: {raw[:100]}")
+                            continue
+
+                        if data.get("type") == "message":
+                            text = data.get("text", "").strip()
+                            if not text:
+                                continue
+
+                            try:
+                                await ws.send_json({"type": "thinking"})
+                            except Exception as e:
+                                log.warning(f"[WS] Failed to send thinking: {e}")
+                                break
+
+                            loop = asyncio.get_event_loop()
+                            try:
+                                response = await asyncio.wait_for(
+                                    loop.run_in_executor(None, self.kernel.process, text),
+                                    timeout=120
+                                )
+                                try:
+                                    await ws.send_json({"type": "response", "text": response})
+                                except Exception as e:
+                                    log.warning(f"[WS] Failed to send response: {e}")
+                            except asyncio.TimeoutError:
+                                log.warning("[WS] Timeout in kernel.process")
+                                try:
+                                    await ws.send_json({"type": "response", "text": "Request timed out after 120s."})
+                                except:
+                                    pass
+                            except Exception as ex:
+                                log.error(f"[WS] kernel.process error: {ex}", exc_info=True)
+                                try:
+                                    await ws.send_json({"type": "response", "text": f"Error: {str(ex)[:200]}"})
+                                except:
+                                    pass
+                except WebSocketDisconnect:
+                    log.info("[WS] Client disconnected")
+                finally:
+                    self._active_ws.discard(ws)
+            except Exception as e:
+                log.error(f"[WS] Accept failed: {e}", exc_info=True)
 
         # Print connection info
         ip = self._get_local_ip()
