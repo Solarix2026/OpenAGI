@@ -458,6 +458,15 @@ class Kernel:
             self.memory.update_meta_knowledge("pending_clarification", {})
 
         # ── 2. Intent classification + context fetch (PARALLEL) ─────
+        # BUG-3 FIX: Mode-aware routing override
+        if hasattr(self, 'mode_manager') and str(self.mode_manager.current) == 'code':
+            # In code mode, any message containing build/create/make → build_app
+            code_triggers = ['build', 'create', 'make', 'write', 'generate', 'scaffold']
+            if any(t in user_input.lower() for t in code_triggers):
+                ctx_str = self.user_ctx.build_context_string() if self.user_ctx else ""
+                log.info(f"[CODE MODE] Routing bypass: {user_input[:50]}")
+                return self._run_action(user_input, {'intent':'action', 'action':'build_app', 'parameters':{'description': user_input}}, ctx_str)
+
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             classify_future = pool.submit(self.semantic.classify_intent, user_input)

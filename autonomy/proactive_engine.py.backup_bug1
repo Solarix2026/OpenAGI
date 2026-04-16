@@ -51,10 +51,6 @@ class ProactiveEngine:
 
     def _get_idle_minutes(self) -> float:
         """Check how long user has been idle. Returns 0 if no history (not idle yet)."""
-        # BUG-2 FIX: Startup gate - never report idle if kernel started less than 10 min ago
-        startup_elapsed = time.time() - self._startup_time
-        if startup_elapsed < 600:  # 10 minute hard gate
-            return 0.0
         recent = self.k.memory.get_recent_timeline(limit=1)
         if not recent:
             return 0.0  # No activity history = just started, not idle
@@ -160,9 +156,6 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
             # BUG-1 FIX: Also send to WebUI
             if hasattr(self.k, '_webui_push') and self.k._webui_push:
                 self.k._webui_push(combined)
-            # BUG-1 FIX: Also send to WebUI
-            if hasattr(self.k, '_webui_push') and self.k._webui_push:
-                self.k._webui_push(combined)
             except Exception as e:
                 log.debug(f"World events error: {e}")
 
@@ -178,67 +171,10 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
 
         # ── Habit nudge (only when idle > 45min, but not within 5min of startup) ─────────────────
         startup_grace = (time.time() - self._startup_time) > 300  # 5 minute grace period
-        # BUG-2 FIX: Add startup_elapsed > 600 to prevent early nudges
-        startup_elapsed = time.time() - self._startup_time
-        if self.k.habits and idle_mins > 45 and (now - self._last_habit_check) > 3600 and startup_grace and startup_elapsed > 600:
+        if self.k.habits and idle_mins > 45 and (now - self._last_habit_check) > 3600 and startup_grace:
             try:
                 prediction = self.k.habits.predict_next_need()
                 if prediction:
                     nudge = self._generate_personalized_nudge(prediction)
                     from core.llm_gateway import send_telegram_alert
                     send_telegram_alert(nudge)
-                # BUG-1 FIX: Also send to WebUI
-                if hasattr(self.k, '_webui_push') and self.k._webui_push:
-                    self.k._webui_push(nudge)
-            # BUG-1 FIX: Also send to WebUI
-            if hasattr(self.k, '_webui_push') and self.k._webui_push:
-                self.k._webui_push(nudge)
-                    log.info(f"[HABIT] Nudge sent (idle {idle_mins:.0f}min)")
-                self._last_habit_check = now
-            except Exception as e:
-                log.debug(f"Habit nudge error: {e}")
-
-        # ── CHRONOS health check (every hour, not full cycle) ────
-        if self.k.chronos and (now - self._last_chronos_check) > 3600:
-            try:
-                log.debug("[CHRONOS] Health check passed")
-                self._last_chronos_check = now
-            except Exception as e:
-                log.debug(f"Chronos check error: {e}")
-
-        # ── Auto-execute simple goals ─────────────────────────────
-        from core.goal_persistence import get_next_priority_goal, update_goal_status
-        goal = get_next_priority_goal()
-        if goal and goal.get("source") in ("conatus", "chronos"):
-            if goal.get("type") in ("refresh", "research"):
-                try:
-                    log.info(f"[AUTO] Executing: {goal['description'][:60]}")
-                    result = self.k.process(goal["description"])
-                    update_goal_status(goal["id"], "completed", result[:200], memory=self.k.memory)
-                except Exception as e:
-                    log.debug(f"Auto-goal failed: {e}")
-
-    def stop(self):
-        self._stop.set()
-        log.info("ProactiveEngine stopped")
-
-    # Topic Deduplication
-    def _topic_hash(self, text: str) -> str:
-        import hashlib
-        words = set(re.findall(r'\b\w{4,}\b', text.lower()))
-        key = " ".join(sorted(list(words))[:5])
-        return hashlib.md5(key.encode()).hexdigest()[:8]
-
-    def _is_duplicate_topic(self, text: str) -> bool:
-        h = self._topic_hash(text)
-        if h in self._notified_topics:
-            age = time.time() - self._notified_topics[h]
-            if age < self._TOPIC_COOLDOWN:
-                return True
-        return False
-
-    def _mark_notified(self, text: str):
-        self._notified_topics[self._topic_hash(text)] = time.time()
-        now = time.time()
-        self._notified_topics = {k: v for k, v in self._notified_topics.items()
-                                 if now - v < self._TOPIC_COOLDOWN * 2}

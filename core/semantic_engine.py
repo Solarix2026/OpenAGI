@@ -24,7 +24,13 @@ log = logging.getLogger("SemanticEngine")
 
 # ── ROUTING PROMPT ────────────────────────────────────────────────
 
-ROUTING_PROMPT_TEMPLATE = """You are a routing classifier. Return JSON only.
+ROUTING_PROMPT_TEMPLATE = """PRIORITY BUILD RULES:
+- "build * app", "create * app", "make * app", "build me a *" → build_app
+- "build a full-stack", "build a SaaS", "scaffold * project" → build_app
+- "/mode code" followed by any build request → build_app immediately
+- Once in CODE mode, NEVER return conversation for build requests
+
+You are a routing classifier. Return JSON only.
 
 Available tools:
 {tool_descriptions}

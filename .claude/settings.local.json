@@ -42,7 +42,13 @@
       "Bash(xargs grep:*)",
       "Bash(ls:*)",
       "Bash(chcp 65001:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8765)",
+      "Bash(curl -s http://localhost:8765/health)",
+      "Bash(curl -v http://localhost:8765/)",
+      "Bash(curl -v -H \"Connection: Upgrade\" -H \"Upgrade: websocket\" http://localhost:8765/ws)",
+      "Bash(curl -s http://localhost:8765/)"
     ]
   }
 }
