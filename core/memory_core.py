@@ -28,7 +28,7 @@ def _get_embedding_model():
     if _EMBEDDING_MODEL is None:
         try:
             from sentence_transformers import SentenceTransformer
-            _EMBEDDING_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+            _EMBEDDING_MODEL = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
             log.info("Embedding model loaded (cached)")
         except Exception as e:
             log.warning(f"Could not load embedding model: {e}")

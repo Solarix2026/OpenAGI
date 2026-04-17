@@ -24,7 +24,7 @@ def _get_encoder():
     if _ENCODER is None:
         try:
             from sentence_transformers import SentenceTransformer
-            _ENCODER = SentenceTransformer("all-MiniLM-L6-v2")
+            _ENCODER = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
             log.info("Tool encoder loaded (cached)")
         except Exception as e:
             log.warning(f"Could not load encoder: {e}")

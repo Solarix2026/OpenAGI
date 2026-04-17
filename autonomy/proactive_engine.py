@@ -29,7 +29,7 @@ class ProactiveEngine:
         self._last_chronos_check = 0
         self._briefing_buffer = []
         self._seen_events = set()
-        self._startup_time = time.time()  # Grace period to avoid immediate nudges
+        self._startup_time = time.time() # Grace period to avoid immediate nudges
 
         # Topic deduplication (24h cooldown)
         self._notified_topics = {}
@@ -53,11 +53,11 @@ class ProactiveEngine:
         """Check how long user has been idle. Returns 0 if no history (not idle yet)."""
         # BUG-2 FIX: Startup gate - never report idle if kernel started less than 10 min ago
         startup_elapsed = time.time() - self._startup_time
-        if startup_elapsed < 600:  # 10 minute hard gate
+        if startup_elapsed < 600: # 10 minute hard gate
             return 0.0
         recent = self.k.memory.get_recent_timeline(limit=1)
         if not recent:
-            return 0.0  # No activity history = just started, not idle
+            return 0.0 # No activity history = just started, not idle
         try:
             last = datetime.fromisoformat(recent[0]["ts"].replace("Z", ""))
             return (datetime.now() - last).total_seconds() / 60
@@ -151,18 +151,14 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
                         elif notify and mode == "briefing":
                             self._briefing_buffer.append(event)
 
-                # Batch immediate notifications (max 2)
                 if immediate[:2]:
                     summaries = [self._format_event_notification(e) for e in immediate[:2]]
-                    combined = " Meanwhile, ".join(s)
+                    combined = " Meanwhile, ".join(summaries)
                     if self.k.notify:
                         self.k.notify.send(combined, channels=["telegram"])
-            # BUG-1 FIX: Also send to WebUI
-            if hasattr(self.k, '_webui_push') and self.k._webui_push:
-                self.k._webui_push(combined)
-            # BUG-1 FIX: Also send to WebUI
-            if hasattr(self.k, '_webui_push') and self.k._webui_push:
-                self.k._webui_push(combined)
+                        # BUG-1 FIX: Also send to WebUI
+                        if hasattr(self.k, '_webui_push') and self.k._webui_push:
+                            self.k._webui_push(combined)
             except Exception as e:
                 log.debug(f"World events error: {e}")
 
@@ -177,7 +173,7 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
                 log.debug(f"Will cycle error: {e}")
 
         # ── Habit nudge (only when idle > 45min, but not within 5min of startup) ─────────────────
-        startup_grace = (time.time() - self._startup_time) > 300  # 5 minute grace period
+        startup_grace = (time.time() - self._startup_time) > 300 # 5 minute grace period
         # BUG-2 FIX: Add startup_elapsed > 600 to prevent early nudges
         startup_elapsed = time.time() - self._startup_time
         if self.k.habits and idle_mins > 45 and (now - self._last_habit_check) > 3600 and startup_grace and startup_elapsed > 600:
@@ -187,14 +183,11 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
                     nudge = self._generate_personalized_nudge(prediction)
                     from core.llm_gateway import send_telegram_alert
                     send_telegram_alert(nudge)
-                # BUG-1 FIX: Also send to WebUI
-                if hasattr(self.k, '_webui_push') and self.k._webui_push:
-                    self.k._webui_push(nudge)
-            # BUG-1 FIX: Also send to WebUI
-            if hasattr(self.k, '_webui_push') and self.k._webui_push:
-                self.k._webui_push(nudge)
+                    # BUG-1 FIX: Also send to WebUI
+                    if hasattr(self.k, '_webui_push') and self.k._webui_push:
+                        self.k._webui_push(nudge)
                     log.info(f"[HABIT] Nudge sent (idle {idle_mins:.0f}min)")
-                self._last_habit_check = now
+                    self._last_habit_check = now
             except Exception as e:
                 log.debug(f"Habit nudge error: {e}")
 

@@ -22,8 +22,8 @@ GROQ_ROUTER_MODEL = os.getenv("GROQ_ROUTER_MODEL", "llama-3.1-8b-instant")
 GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile" # prose fallback
 
 # NVIDIA NIM - Kimi k2.5 as primary
-NVIDIA_MAIN_MODEL = os.getenv("NVIDIA_MAIN_MODEL", "moonshotai/kimi-k2.5")
-NVIDIA_FAST_MODEL = os.getenv("NVIDIA_FAST_MODEL", "moonshotai/kimi-k2.5")  # Llama EOL, use Kimi for fast too
+NVIDIA_MAIN_MODEL = os.getenv("NVIDIA_MAIN_MODEL", "moonshotai/kimi-k2-instruct")
+NVIDIA_FAST_MODEL = os.getenv("NVIDIA_FAST_MODEL", "moonshotai/kimi-k2-instruct")  # Llama EOL, use Kimi for fast too
 
 _groq_client = None
 _nvidia_client = None

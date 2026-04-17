@@ -387,6 +387,28 @@ class Kernel:
         except ImportError:
             self.chronos = None
 
+        # ── Cron Scheduler (persistent task scheduling) ───────────
+        try:
+            from autonomy.cron_scheduler import CronScheduler
+            self.cron = CronScheduler(self)
+            self.cron.start()
+            self.cron.register_as_tool(self.executor.registry)
+            log.info("⏱ CronScheduler started")
+        except ImportError as e:
+            self.cron = None
+            log.debug(f"CronScheduler not available: {e}")
+
+        # ── Event Trigger Engine (event-driven task execution) ─────
+        try:
+            from autonomy.event_triggers import EventTriggerEngine
+            self.triggers = EventTriggerEngine(self)
+            self.triggers.start()
+            self.triggers.register_as_tool(self.executor.registry)
+            log.info("⚡ EventTriggerEngine started")
+        except ImportError as e:
+            self.triggers = None
+            log.debug(f"EventTriggerEngine not available: {e}")
+
         # WebUI server reference (set when web mode starts)
         self._webui_push = None
 
@@ -861,6 +883,9 @@ class Kernel:
                     text = msg.get("text", "").strip()
                     if text:
                         log.info(f"[TG] Received: {text[:60]}")
+                    # Check keyword triggers
+                    if hasattr(self, 'triggers') and self.triggers:
+                        self.triggers.check_keyword(text)
                         # Check if innovate tool might be invoked
                         is_innovate = "innovate" in text.lower() or "invent" in text.lower()
                         if is_innovate:

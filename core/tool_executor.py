@@ -268,8 +268,11 @@ class ToolExecutor:
         return {"success": True, "message": f"Opened: {url}", "url": url}
 
     def _write_file(self, params: dict) -> dict:
+        import os
         path = params.get("path", "output.txt")
         content = params.get("content", "")
+        # Expand ~ and environment variables like %USERNAME%, $HOME
+        path = os.path.expanduser(os.path.expandvars(path))
         p = Path(path) if Path(path).is_absolute() else self.workspace / path
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
