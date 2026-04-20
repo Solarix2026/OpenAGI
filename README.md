@@ -1,4 +1,4 @@
-# OpenAGI v5.5 — Autonomous Intelligence System (L4)
+# OpenAGI v5.6 — Autonomous Intelligence System (L4)
 
 > An L4 autonomous AI agent with memory, computer control, self-evolution, proactive intelligence, and multi-agent hiring.
 > Built on NVIDIA NIM + Groq. Local-first. Private. Open source.
@@ -11,7 +11,20 @@
 
 ---
 
-## What's New in v5.5
+## What's New in v5.6
+
+| Feature | Description |
+|---------|-------------|
+| **System Prompt v2** | Leaner SYSTEM_PROMPT per Anthropic context engineering. Removed nanny rules, kept guardrails + autonomy. |
+| **Vision Model** | Separate vision model (Llama 3.2 90B Vision) — Kimi K2 has no vision. Settings dropdown in WebUI. |
+| **Auto-Screenshot** | Automatic before/after screenshots for visual tasks. Vision analysis pushed to WebUI in real-time. |
+| **Goal Auto-Tick** | Detects when tasks complete goals. Auto-marks complete with confidence > 0.7. |
+| **Inline Translate** | Select text in WebUI, auto-translate EN/ZH/BM with TTS support. |
+| **CEO Role** | Added CEO agent to AgentOrg — strategic planning, business decisions. |
+| **Perplexity News** | AI-powered news search with citations. Falls back to RSS if no API key. |
+| **License** | Copyright updated to ApeironAI. |
+
+### v5.5 Features (Previously)
 
 | Feature | Description |
 |---------|-------------|
