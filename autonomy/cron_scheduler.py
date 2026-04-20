@@ -220,6 +220,56 @@ Your response:"""
     def stop(self):
         self._stop.set()
 
+    def schedule_with_reminder(self, description: str, cron: str = None, natural: str = None, notify_completion: bool = True) -> dict:
+        """Schedule a task with optional completion notification."""
+        task = self.add_task(description, cron=cron, natural=natural)
+        task["notify_completion"] = notify_completion
+        task["scheduled"] = datetime.now().isoformat()
+        self._update_task(task)
+        return task
+
+    def _update_task(self, updated_task: dict):
+        """Update a task in storage."""
+        for i, t in enumerate(self._tasks):
+            if t.get("id") == updated_task.get("id"):
+                self._tasks[i] = updated_task
+                self._save()
+                return True
+        return False
+
+    def _broadcast_task_complete(self, task: dict, result: str):
+        """Broadcast task completion via WebSocket and Telegram."""
+        try:
+            from core.llm_gateway import send_telegram_alert
+            send_telegram_alert(
+                f"✅ Task completed: {task['description'][:60]}\n\n{result[:300]}"
+            )
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self.kernel, '_webui_push') and self.kernel._webui_push:
+                import json
+                self.kernel._webui_push(json.dumps({
+                    "type": "task_complete",
+                    "task": task,
+                    "result": result[:500],
+                    "timestamp": datetime.now().isoformat()
+                }))
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self.kernel, 'memory'):
+                self.kernel.memory.log_event(
+                    "scheduled_task_complete",
+                    f"Completed: {task['description'][:80]}",
+                    result[:200],
+                    importance=0.6
+                )
+        except Exception:
+            pass
+
     def list_tasks(self) -> list:
         return self._tasks
 

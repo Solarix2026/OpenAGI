@@ -28,6 +28,10 @@ class ToolExecutor:
         self.meta = metacognitive  # MetacognitiveEngine for capability feedback
         self.registry = self._build_registry()
 
+    def set_metacognition(self, meta):
+        """Called by kernel after both executor and meta are initialized."""
+        self.meta = meta
+
     def _build_registry(self):
         from core.tool_registry import ToolRegistry
         reg = ToolRegistry()
@@ -85,6 +89,28 @@ class ToolExecutor:
         reg.register("investment_watchlist", self._investment_watchlist,
             "Get AI investment watchlist: stock analysis, trends, top picks",
             {"focus": {"type": "string", "default": "technology"}})
+
+        # Link/URL reader tool
+        reg.register("read_url", self._read_url,
+            "Read and extract content from any URL or webpage. Returns clean text.",
+            {"url": {"type": "string", "required": True}, "question": {"type": "string", "optional": True}})
+
+        # HTML PPT Builder
+        try:
+            from generation.html_ppt_builder import register_html_ppt_tool
+            register_html_ppt_tool(reg)
+            log.info("🎨 HTML PPT builder registered")
+        except Exception as e:
+            log.debug(f"HTML PPT skip: {e}")
+
+        # Register memory and goal tools for skills
+        reg.register("list_goals", self._list_goals,
+            "List all active goals from the goal queue",
+            {})
+
+        reg.register("memory_search", self._memory_search,
+            "Search episodic memory for past events and context",
+            {"query": {"type": "string", "required": True}})
 
         return reg
 
@@ -269,14 +295,26 @@ class ToolExecutor:
 
     def _write_file(self, params: dict) -> dict:
         import os
+        from pathlib import Path
         path = params.get("path", "output.txt")
         content = params.get("content", "")
-        # Expand ~ and environment variables like %USERNAME%, $HOME
+
+        # Expand env vars and ~
         path = os.path.expanduser(os.path.expandvars(path))
-        p = Path(path) if Path(path).is_absolute() else self.workspace / path
+
+        # Desktop aliases
+        DESKTOP = Path.home() / "Desktop"
+        desktop_aliases = ["desktop", "~/desktop", "桌面"]
+        if path.lower().strip("/\\") in desktop_aliases:
+            fname = params.get("filename", params.get("name", "output.txt"))
+            path = str(DESKTOP / fname)
+        elif not os.path.isabs(path) and not path.startswith("~"):
+            path = str(self.workspace / path)
+
+        p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
-        return {"success": True, "path": str(p), "bytes": len(content)}
+        return {"success": True, "path": str(p), "bytes": len(content), "absolute_path": str(p.resolve())}
 
     def _read_file(self, params: dict) -> dict:
         path = params.get("path", "")
@@ -346,6 +384,18 @@ class ToolExecutor:
         q = params.get("query", "")
         results = self.memory.search_events(q, limit=5)
         return {"success": True, "results": results, "count": len(results)}
+
+    def _list_goals(self, params: dict) -> dict:
+        """List all active goals from the goal queue."""
+        try:
+            from core.goal_persistence import load_goal_queue
+            goals = load_goal_queue()
+            active = [g for g in goals if g.get('status') in ('pending', 'active')]
+            return {"success": True, "goals": active, "count": len(active)}
+        except ImportError:
+            return {"success": False, "error": "goal_persistence module not available"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def _world_events(self, params: dict) -> dict:
         """Fetch world events via RSS."""
@@ -463,3 +513,97 @@ Disclaimer: Not financial advice. Educational only."""
             "watchlist": report,
             "focus": focus
         }
+
+    def _read_url(self, params: dict) -> dict:
+        """Read and extract content from any URL or webpage. Returns clean text."""
+        import requests
+        from core.llm_gateway import call_nvidia
+
+        url = params.get("url", "").strip()
+        question = params.get("question", "")
+
+        if not url:
+            return {"success": False, "error": "No URL provided"}
+
+        # Normalize URL
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            }
+            r = requests.get(url, headers=headers, timeout=20)
+            r.raise_for_status()
+            content_type = r.headers.get("content-type", "")
+
+            if "pdf" in content_type:
+                # PDF handling
+                try:
+                    import pdfplumber, io
+                    with pdfplumber.open(io.BytesIO(r.content)) as pdf:
+                        text = "\n\n".join(
+                            page.extract_text() or "" for page in pdf.pages[:15]
+                        )
+                except ImportError:
+                    return {"success": False, "error": "pip install pdfplumber for PDF support"}
+            else:
+                # HTML/text
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(r.text, "html.parser")
+                    # Remove noise
+                    for tag in soup(["script", "style", "nav", "header", "footer", "aside", "iframe", "noscript", "form"]):
+                        tag.decompose()
+                    # Try to find main content
+                    main = (soup.find("main") or soup.find("article") or soup.find(id="content") or
+                           soup.find(class_="content") or soup.find("body"))
+                    text = main.get_text(separator="\n", strip=True) if main else soup.get_text()
+                    # Clean whitespace
+                    text = re.sub(r'\n{3,}', '\n\n', text)
+                    text = re.sub(r' {2,}', ' ', text)
+                    title = soup.title.string if soup.title else url
+                except ImportError:
+                    text = re.sub(r"<[^>]+>", " ", r.text)
+                    text = re.sub(r"\s+", " ", text).strip()
+                    title = url
+
+            # Limit text size
+            text = text[:8000]
+
+            if not question:
+                # Return summary
+                summary_prompt = f"""Summarize the key content from this webpage.
+URL: {url}
+Content: {text[:4000]}
+Provide a clear, structured summary of what this page is about."""
+                summary = call_nvidia([{"role": "user", "content": summary_prompt}], max_tokens=400)
+                return {
+                    "success": True,
+                    "url": url,
+                    "title": locals().get("title", url),
+                    "summary": summary,
+                    "raw_text": text[:2000],
+                    "char_count": len(text)
+                }
+            else:
+                # Answer specific question
+                qa_prompt = f"""Based on this webpage content, answer the question.
+URL: {url}
+Content: {text[:5000]}
+Question: {question}
+Answer based only on the page content:"""
+                answer = call_nvidia([{"role": "user", "content": qa_prompt}], max_tokens=600)
+                return {
+                    "success": True,
+                    "url": url,
+                    "question": question,
+                    "answer": answer
+                }
+        except requests.exceptions.Timeout:
+            return {"success": False, "error": f"Timeout reading {url}"}
+        except requests.exceptions.HTTPError as e:
+            return {"success": False, "error": f"HTTP {e.response.status_code}: {url}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}

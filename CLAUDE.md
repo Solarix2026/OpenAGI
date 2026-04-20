@@ -72,9 +72,9 @@ python -c "from test_l4_verification import *; test_1_no_hardcode()"
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` - For Telegram mode
 - `WAKE_WORD=jarvis` - Voice wake word
 
-## Architecture Overview
+## Architecture v5.5
 
-### Core Design (Kernel v5.0)
+### Core Design (Kernel v5.5)
 
 The kernel follows a **semantic routing → execution → enriched response** flow:
 
@@ -99,20 +99,26 @@ The kernel follows a **semantic routing → execution → enriched response** fl
 ```
 core/
 ├── kernel_impl.py - Main Kernel class, CLI/web/voice/telegram modes
-├── llm_gateway.py - NVIDIA/Groq API calls, provider health checks
+├── llm_gateway.py - NVIDIA/Groq/Kimi API calls, provider health checks
 ├── semantic_engine.py - Intent classification and depth analysis
 ├── tool_registry.py - Tool registration and listing
 ├── tool_executor.py - Tool execution, sandbox, system commands
 ├── memory_core.py - Event logging, episodic memory, FAISS search
 ├── agentic_rag.py - RAG retrieval for context enrichment
 ├── config_loader.py - Hybrid config extraction (YAML + envvars)
-├── goal_alignment_monitor.py- Goal tracking and alignment
+├── goal_persistence.py - Goal CRUD operations
+├── planning_assistant.py - AI-powered task planning with auto-scheduling
 └── sandbox.py - Safe execution namespace
 
 autonomy/
+├── cron_scheduler.py - v2 with natural language + completion reminders
 ├── proactive_engine.py - Background monitoring for nudges
 ├── habit_profiler.py - User behavior analysis
 └── will_engine.py - Intent persistence across sessions
+
+agentic/
+├── skill_library.py - Skill registration and discovery (YAML-based)
+├── agent_org.py - Multi-agent hiring (CTO/CMO/Developer/Analyst/Researcher)
 
 control/
 ├── accessibility_tree.py - Windows accessibility API integration
