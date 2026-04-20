@@ -1,4 +1,4 @@
-# Copyright (c) 2026 HackerTMJ
+# Copyright (c) 2026 Solarix2026
 # OpenAGI — Autonomous Intelligence System
 # MIT License — https://github.com/Solarix2026/OpenAGI
 
@@ -103,7 +103,15 @@ class ToolExecutor:
         except Exception as e:
             log.debug(f"HTML PPT skip: {e}")
 
-        # Register memory and goal tools for skills
+        # Perplexity news search
+    try:
+        from core.perplexity_client import register_perplexity_tools
+        register_perplexity_tools(reg)
+        log.info("📰 Perplexity news search registered")
+    except Exception as e:
+        log.debug(f"Perplexity skip: {e}")
+
+    # Register memory and goal tools for skills
         reg.register("list_goals", self._list_goals,
             "List all active goals from the goal queue",
             {})

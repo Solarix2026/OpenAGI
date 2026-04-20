@@ -1,4 +1,4 @@
-# Copyright (c) 2026 HackerTMJ
+# Copyright (c) 2026 Solarix2026
 # OpenAGI — Autonomous Intelligence System
 # MIT License — https://github.com/Solarix2026/OpenAGI
 

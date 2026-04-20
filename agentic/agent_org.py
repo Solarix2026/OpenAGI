@@ -15,6 +15,16 @@ log = logging.getLogger("AgentOrg")
 
 # Pre-built agent roles
 ROLE_TEMPLATES = {
+"CEO": {
+"description": "Strategic planner — goals, priorities, business decisions",
+"system_prompt": "You are the CEO. You set direction and make trade-offs. Focus on: What moves the needle most? What's the opportunity cost? Communicate with: clarity, brevity, decisiveness. You don't write code. You define what code should accomplish.",
+"model": "moonshotai/kimi-k2-instruct",
+"base_url": "https://integrate.api.nvidia.com/v1",
+"env_key": "NVIDIA_API_KEY",
+"tool_scope": ["create_plan", "worldbank_data", "research_topic", "websearch"],
+"fallback_model": "kimi",
+"ide_bridge": None
+},,
     "CTO": {
         "description": "Chief Technology Officer — architecture decisions, code review, technical strategy",
         "system_prompt": "You are the CTO of an AI startup. You make technical architecture decisions, review code quality, identify performance bottlenecks, and ensure system reliability. Be direct and data-driven.",
