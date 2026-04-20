@@ -1,0 +1,25 @@
+--- a/autonomy/cron_scheduler.py
++++ b/autonomy/cron_scheduler.py
+@@ -198,11 +198,21 @@ class CronScheduler:
+                     send_telegram_alert(
+                         f"⏰ Scheduled task ran:\n{result[:400]}"
+                     )
+                     if hasattr(self.kernel, '_webui_push') and self.kernel._webui_push:
+-                        self.kernel._webui_push(
+-                            f"⏰ Scheduled: {task['description'][:50]}...\n{result[:300]}"
+-                        )
++                        import json
++                        self.kernel._webui_push(json.dumps({
++                            "type": "task_ran",
++                            "task_id": task.get("id"),
++                            "description": task['description'][:100],
++                            "result": result[:300]
++                        }))
+                 except Exception as e:
+                     log.debug(f"Notification error: {e}")
++
++                # Completion reminder if requested
++                if task.get("notify_completion"):
++                    self._broadcast_task_complete(task, str(result))
+             except Exception as e:
+                 log.error(f"[CRON] Task failed: {e}")

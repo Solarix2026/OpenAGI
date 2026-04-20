@@ -1,0 +1,364 @@
+/* Loading State Styles */
+
+/* Progress Bar */
+.progressContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progressLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.progressBar {
+  position: relative;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--purple));
+  border-radius: 2px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 4px;
+}
+
+.progressFill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+.progressText {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+}
+
+/* Indeterminate Progress */
+.progressBar.indeterminate .progressFill {
+  animation: indeterminate 1.5s ease-in-out infinite;
+  transition: none;
+}
+
+@keyframes indeterminate {
+  0% {
+    width: 0%;
+    left: 0%;
+  }
+  50% {
+    width: 50%;
+    left: 25%;
+  }
+  100% {
+    width: 0%;
+    left: 100%;
+  }
+}
+
+/* Stepped Progress */
+.progressBar.stepped {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-2) 48%,
+    transparent 48%,
+    transparent 52%
+  );
+  background-size: calc(100% / 4) 100%;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Step Progress */
+.stepProgress {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  position: relative;
+}
+
+.stepConnector {
+  position: absolute;
+  top: 14px;
+  right: -50%;
+  width: calc(100% - 24px);
+  height: 2px;
+  background: var(--border);
+}
+
+.step:last-child .stepConnector {
+  display: none;
+}
+
+.stepIndicator {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+.step.active .stepIndicator {
+  background: var(--blue-dim);
+  border-color: var(--blue);
+  color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(77, 138, 240, 0.15);
+}
+
+.step.completed .stepIndicator {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+
+.step.completed + .step .stepConnector {
+  background: var(--green);
+}
+
+.stepLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  transition: color 0.3s ease;
+}
+
+.step.active .stepLabel,
+.step.completed .stepLabel {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Loading Spinner */
+.spinnerContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.spinnerContainer.sm {
+  --size: 20px;
+}
+
+.spinnerContainer.md {
+  --size: 32px;
+}
+
+.spinnerContainer.lg {
+  --size: 48px;
+}
+
+.spinner {
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+}
+
+.spinnerRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--blue);
+}
+
+.spinnerRing:nth-child(1) {
+  width: var(--size);
+  height: var(--size);
+  animation: spin 1s linear infinite;
+}
+
+.spinnerRing:nth-child(2) {
+  width: calc(var(--size) * 0.75);
+  height: calc(var(--size) * 0.75);
+  border-top-color: var(--purple);
+  animation: spin 1s linear infinite reverse;
+}
+
+.spinnerRing:nth-child(3) {
+  width: calc(var(--size) * 0.5);
+  height: calc(var(--size) * 0.5);
+  border-top-color: var(--cyan);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.spinnerText {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Skeleton Wrapper */
+.skeletonWrapper {
+  position: relative;
+}
+
+.skeletonWrapper > :first-child {
+  filter: blur(1px);
+  opacity: 0.7;
+}
+
+/* Page Transition */
+.pageTransition {
+  position: relative;
+}
+
+.pageTransition.transitioning {
+  min-height: 100vh;
+}
+
+.pageTransitionOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: rgba(var(--bg), 0.8);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+.pageContentHidden {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Fast Start Screen */
+.fastStart {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  z-index: 1000;
+}
+
+.fastStartContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  max-width: 320px;
+  padding: 40px;
+}
+
+.fastStartBrand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.fastStartLogo {
+  width: 64px;
+  height: 64px;
+}
+
+.logoSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.pulseRing {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+.logoCheck {
+  animation: drawCheck 0.5s ease forwards;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+
+@keyframes drawCheck {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.fastStartTitle {
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--text) 0%, var(--text-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+.fastStartTagline {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.fastStartProgress {
+  width: 100%;
+  max-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fastStartStatus {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}

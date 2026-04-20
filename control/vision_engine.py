@@ -41,23 +41,13 @@ class VisionEngine:
         return base64.b64encode(Path(path).read_bytes()).decode("utf-8")
 
     def _call_vision(self, image_path: str, prompt: str, max_tokens=500) -> str:
-        if not self._client:
-            return ""
-        b64 = self._encode_image(image_path)
-        ext = Path(image_path).suffix.lower().lstrip(".")
-        mime = f"image/{ext}" if ext in ("png", "jpg", "jpeg", "webp") else "image/png"
-
-        try:
-            resp = self._client.chat.completions.create(
-                model=VISION_MODEL,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                        {"type": "text", "text": prompt}
-                    ]
-                }],
-                max_tokens=max_tokens,
+        """Use dedicated vision function instead of generic call_nvidia."""
+        from core.llm_gateway import call_vision
+        return call_vision(
+            [{"role": "user", "content": prompt}],
+            image_path=image_path,
+            max_tokens=max_tokens
+        )
                 temperature=0.1
             )
             return resp.choices[0].message.content.strip()

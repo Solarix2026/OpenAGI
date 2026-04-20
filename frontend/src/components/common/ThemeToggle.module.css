@@ -1,0 +1,36 @@
+.toggleBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toggleBtn:hover {
+  border-color: var(--border-bright);
+  background: var(--surface-3);
+}
+
+.themeLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.toggleBtn:hover .themeLabel {
+  color: var(--text);
+}
+
+.toggleBtn i {
+  color: var(--text-muted);
+}
+
+.toggleBtn:hover i {
+  color: var(--text);
+}

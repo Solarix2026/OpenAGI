@@ -33,12 +33,12 @@ ROUTING_PROMPT_TEMPLATE = """PRIORITY BUILD RULES:
 You are a routing classifier. Return JSON only.
 
 Available tools:
-{tool_descriptions}
+%(tool_descriptions)s
 
-User input: "{user_input}"
+User input: "%(user_input)s"
 
 Classify the intent. Return:
-{{"intent": "action" or "conversation", "action": "<tool_name>" (if action), "parameters": {{"key": "value"}} (if action), "confidence": 0.0-1.0}}
+{"intent": "action" or "conversation", "action": "<tool_name>" (if action), "parameters": {"key": "value"} (if action), "confidence": 0.0-1.0}
 
 ROUTING RULES (highest priority first):
 1. "search for X", "find X", "look up X", "news about X", "web search X", "tell me about X" → websearch, query=X
@@ -49,51 +49,48 @@ ROUTING RULES (highest priority first):
 6. "run/execute command" → shell_command
 7. "what's happening", "world news", "global events" → world_events
 8. "recall/remember/what did I say" → memory_search
-9. Everything else → conversation
+9. "create/write/save * on desktop" → write_file, path="~/Desktop/{{filename}}"
+10. "analyze stock X", "stock price X", "how is X doing" → stock_quote, ticker=X
+11. "search arxiv for X", "find papers about X", "academic research X" → arxiv_search, query=X
+12. "world bank data X", "GDP of X", "economic data X" → worldbank_data, country=X
+13. "read this link/URL/website", "summarize this page", "extract from URL" → read_url, url=X
+14. "hire CTO/CMO/Developer/Researcher/Analyst" → hire_agent, role=X
+15. "ask/tell/delegate to CTO/researcher/developer", "assign task to X" → delegate_task, role=X, task=Y
+16. Everything else → conversation
 
 EXAMPLES:
-"go to web search openai news" → {{"intent":"action","action":"websearch","parameters":{{"query":"openai latest news"}},"confidence":0.95}}
-"open calculator" → {{"intent":"action","action":"system_open_app","parameters":{{"app_name":"calc.exe"}},"confidence":0.99}}
-"打开浏览器搜索AI新闻" → {{"intent":"action","action":"websearch","parameters":{{"query":"AI最新新闻"}},"confidence":0.95}}
-"what's happening in the world" → {{"intent":"action","action":"world_events","parameters":{{}},"confidence":0.9}}
+"create a note on my desktop" → {{"intent":"action","action":"write_file","parameters":{"path":"~/Desktop/note.txt","content":""},"confidence":0.97}
+"what's the stock price of AAPL" → {{"intent":"action","action":"stock_quote","parameters":{"ticker":"AAPL"},"confidence":0.98}
+"search arxiv for quantum computing" → {{"intent":"action","action":"arxiv_search","parameters":{"query":"quantum computing"},"confidence":0.97}
+"get Malaysia GDP data" → {{"intent":"action","action":"worldbank_data","parameters":{"country":"MY","indicator":"gdp_growth"},"confidence":0.95}
+"go to web search openai news" → {{{"intent":"action","action":"websearch","parameters":{{"query":"openai latest news"}},"confidence":0.95}}
+"open calculator" → {{{"intent":"action","action":"system_open_app","parameters":{{"app_name":"calc.exe"}},"confidence":0.99}}
+"打开浏览器搜索AI新闻" → {{{"intent":"action","action":"websearch","parameters":{{"query":"AI最新新闻"}},"confidence":0.95}}
+"what's happening in the world" → {{{"intent":"action","action":"world_events","parameters":{{}},"confidence":0.9}}
 "how are you" → {{"intent":"conversation","confidence":0.99}}
-"morning briefing" → {{"intent":"action","action":"morning_brief","parameters":{{}},"confidence":0.99}}
-"给我早上简报" → {{"intent":"action","action":"morning_brief","parameters":{{}},"confidence":0.99}}
-"what can you do" → {{"intent":"action","action":"system_status","parameters":{{}},"confidence":0.95}}
-"evolve yourself" → {{"intent":"action","action":"run_evolution","parameters":{{}},"confidence":0.9}}
-"innovate on X" → {{"intent":"action","action":"run_innovation","parameters":{{"problem":"X"}},"confidence":0.9}}
-"my goals" → {{"intent":"action","action":"list_goals","parameters":{{}},"confidence":0.95}}
+"morning briefing" → {{{"intent":"action","action":"morning_brief","parameters":{{}},"confidence":0.99}}
+"给我早上简报" → {{{"intent":"action","action":"morning_brief","parameters":{{}},"confidence":0.99}}
+"what can you do" → {{{"intent":"action","action":"system_status","parameters":{{}},"confidence":0.95}}
+"evolve yourself" → {{{"intent":"action","action":"run_evolution","parameters":{{}},"confidence":0.9}}
+"innovate on X" → {{{"intent":"action","action":"run_innovation","parameters":{{"problem":"X"}},"confidence":0.9}}
+"my goals" → {{{"intent":"action","action":"list_goals","parameters":{{}},"confidence":0.95}}
+"read this web URL" → {{{"intent":"action","action":"read_url","parameters":{{"url":"URL"}},"confidence":0.95}}
+"hire a CTO" → {{{"intent":"action","action":"hire_agent","parameters":{{"role":"CTO"}},"confidence":0.95}}
+"ask the developer to write tests" → {{{"intent":"action","action":"delegate_task","parameters":{{"role":"Developer","task":"write tests"}},"confidence":0.93}}
 """
 
 
 
 # ── DEPTH ANALYSIS PROMPT ─────────────────────────────────────────
 
-DEPTH_ANALYSIS_PROMPT = """Analyze this user input at semantic depth.
-
-Input: "{user_input}"
-
-Determine:
-1. Is this a surface request or does it hide a deeper need?
-2. Does executing this immediately produce high-quality output, or does it need clarification first?
-3. What is the user's real goal (not just what they said)?
-
-Return JSON:
-{{"depth": "execute" | "clarify" | "probe", "real_goal": "what user actually wants", "hidden_assumption": "assumption they're making, or null", "missing_params": ["param1", "param2"], "counter_question": "one precise question to ask, or null", "clarify_reason": "why you need more info, or null"}}
-
-DEPTH GUIDE:
-- execute: clear action, no ambiguity. "open calc" = execute.
-- clarify: needs 1-2 parameters for quality output.
-    "write a script" = clarify (what does it do?)
-    "I want abs" = clarify (age/weight/training frequency?)
-    "analyze my competition" = clarify (which industry/dimensions?)
-- probe: contains a hidden assumption worth surfacing.
-    "how do I grow faster" = probe (faster than what? grow in which dimension?)
-    "is AI going to replace me" = probe (replace which part of your work?)
-
-For clarify/probe: counter_question must be ONE sharp question in user's language.
-Not a list. Not "here are some things to consider". One question.
-"""
+DEPTH_ANALYSIS_PROMPT = """Analyze user input depth. Return JSON only.
+Input: "%(user_input)s"
+Return: {"depth": "execute|clarify|probe", "real_goal": "actual intent", "counter_question": "one sharp question or null"}
+Rules:
+- execute: clear action, 4 words or more
+- clarify: missing 1 critical parameter (e.g. "write a script" — what does it do?)
+- probe: hides deeper assumption worth surfacing
+- counter_question: ONE question in user's language, never null if clarify/probe"""
 
 
 class SemanticEngine:
@@ -106,10 +103,10 @@ class SemanticEngine:
         Returns: {intent, action, parameters, confidence}
         """
         tool_desc = self.registry.get_tool_descriptions()
-        prompt = ROUTING_PROMPT_TEMPLATE.format(
-            tool_descriptions=tool_desc,
-            user_input=user_input.replace('"', "'")
-        )
+        prompt = ROUTING_PROMPT_TEMPLATE % {
+            "tool_descriptions": tool_desc,
+            "user_input": user_input.replace('"', "'")
+        }
 
         try:
             raw = call_groq_router(
@@ -135,9 +132,9 @@ class SemanticEngine:
         NVIDIA semantic depth analysis.
         Decides: execute immediately / ask clarifying question / probe assumption.
         """
-        prompt = DEPTH_ANALYSIS_PROMPT.format(
-            user_input=user_input.replace('"', "'")
-        )
+        prompt = DEPTH_ANALYSIS_PROMPT % {
+            "user_input": user_input.replace('"', "'")
+        }
 
         try:
             raw = call_nvidia(

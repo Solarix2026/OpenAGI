@@ -10,7 +10,7 @@ pip install groq openai chromadb sentence-transformers ^
     websockets qrcode[pil] Pillow pyttsx3 edge-tts ^
     google-auth google-auth-oauthlib google-auth-httplib2 ^
     google-api-python-client feedparser pyyaml jinja2 ^
-    pyaudio sounddevice soundfile plyer psutil faiss-cpu
+    pyaudio sounddevice soundfile plyer psutil faiss-cpu python-pptx playwright
 
 if not exist .env (
     echo GROQ_API_KEY=your_groq_key > .env
@@ -24,6 +24,11 @@ if not exist .env (
     echo USER_COUNTRY=Malaysia >> .env
     echo NVIDIA_MAIN_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1 >> .env
     notepad .env
+)
+
+:: Install Playwright browsers
+echo Installing Playwright browsers...
+python -m playwright install chromium
 )
 
 if not exist skills mkdir skills

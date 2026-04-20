@@ -48,7 +48,22 @@
       "Bash(curl -s http://localhost:8765/health)",
       "Bash(curl -v http://localhost:8765/)",
       "Bash(curl -v -H \"Connection: Upgrade\" -H \"Upgrade: websocket\" http://localhost:8765/ws)",
-      "Bash(curl -s http://localhost:8765/)"
+      "Bash(curl -s http://localhost:8765/)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(npm run:*)",
+      "Bash(dir:*)",
+      "Bash(grep:*)",
+      "Read(//mnt/c/Users/mjtan/desktop/openagi/**)",
+      "Bash(sed -i \"121,123s/ChatPage/ChatV2Page/; 121,123s/DashboardPage/DashboardV2Page/; 121,123s/HistoryPage/HistoryV2Page/\" src/App.tsx)",
+      "Bash(npm install:*)",
+      "Bash(npm i:*)",
+      "Bash(sed -i '317d' src/pages/Dashboard.tsx)",
+      "Bash(sed -i '317s/^/>/' src/pages/Dashboard.tsx)",
+      "Bash(head -n 194 autonomy/cron_scheduler.py)",
+      "Bash(tail -n +207 autonomy/cron_scheduler.py)",
+      "Bash(awk 'NR>=187 && NR<=217' C:/Users/mjtan/desktop/openagi/autonomy/cron_scheduler.py)",
+      "Bash(venv\\\\Scripts\\\\python -m py_compile core/tool_executor.py)"
     ]
   }
 }

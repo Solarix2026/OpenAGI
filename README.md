@@ -76,7 +76,7 @@
 │                      KERNEL v5.5                            │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐       │
 │  │  Semantic   │──→│    Tool      │──→│   NVIDIA     │       │
-│  │  Engine     │  │  Executor    │  │  NIM 49B     │       │
+│  │  Engine     │  │  Executor    │  │  NIM KIMI     │       │
 │  │ (Groq 8B)   │  │  (Registry)  │  │  Response    │       │
 │  └─────────────┘  └──────────────┘  └──────────────┘       │
 │         │                  │                  │            │

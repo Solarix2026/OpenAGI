@@ -1,0 +1,215 @@
+/* Interactive Radar Chart Styles */
+
+.container {
+  position: relative;
+  width: 100%;
+}
+
+/* Custom Tooltip */
+.tooltip {
+  background: var(--surface-2);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  min-width: 180px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.tooltipHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid;
+}
+
+.tooltipTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tooltipValue {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.tooltipDesc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.tooltipHint {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--blue);
+  font-style: italic;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.legendItem:hover {
+  border-color: var(--border-bright);
+  background: var(--surface-2);
+}
+
+.legendItemActive {
+  border-color: var(--blue);
+  background: var(--blue-dim);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legendLabel {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.legendValue {
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+/* Detail Panel */
+.detailPanel {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--blue);
+}
+
+.detailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.detailHeader h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.closeBtn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--surface-2);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.closeBtn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.detailDesc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 12px 0;
+}
+
+.detailMetrics {
+  display: flex;
+  gap: 16px;
+}
+
+.detailMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailMetricLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detailMetricValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+
+.statusHigh {
+  color: var(--green);
+}
+
+.statusMedium {
+  color: var(--yellow);
+}
+
+.statusLow {
+  color: var(--red);
+}
+
+/* Mini Radar */
+.miniRadar {
+  flex-shrink: 0;
+}
+
+/* Recharts Customizations */
+:global(.recharts-text) {
+  fill: var(--text-muted);
+}
+
+:global(.recharts-polar-angle-axis-tick-value) {
+  fill: var(--text-muted);
+}
+
+:global(.recharts-polar-radius-axis-tick-value) {
+  fill: var(--text-dim);
+}
+
+:global(.recharts-tooltip-wrapper) {
+  z-index: 100;
+}

@@ -1,0 +1,395 @@
+/* Glassmorphism Design System - Phase: Modern UI/UX Enhancements */
+
+:root {
+  /* Light Theme - Glassmorphism */
+  --glass-bg-light: rgba(255, 255, 255, 0.25);
+  --glass-bg-light-2: rgba(255, 255, 255, 0.4);
+  --glass-bg-light-3: rgba(255, 255, 255, 0.6);
+  --glass-border-light: rgba(255, 255, 255, 0.18);
+  --glass-shadow-light: 0 8px 32px rgba(31, 38, 135, 0.15);
+  --glass-blur-light: blur(12px);
+
+  /* Dark Theme - Glassmorphism */
+  --glass-bg-dark: rgba(30, 30, 40, 0.25);
+  --glass-bg-dark-2: rgba(40, 40, 50, 0.4);
+  --glass-bg-dark-3: rgba(50, 50, 60, 0.6);
+  --glass-border-dark: rgba(255, 255, 255, 0.08);
+  --glass-shadow-dark: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --glass-blur-dark: blur(16px);
+
+  /* Semantic Colors */
+  --success-glass: rgba(16, 185, 129, 0.2);
+  --warning-glass: rgba(245, 158, 11, 0.2);
+  --error-glass: rgba(239, 68, 68, 0.2);
+  --info-glass: rgba(59, 130, 246, 0.2);
+
+  /* Animations */
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.15s ease;
+  --animation-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Light Theme Implementation */
+body {
+  background-image:
+    radial-gradient(circle at 20% 80%, rgba(100, 100, 255, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 100, 200, 0.05) 0%, transparent 50%);
+  background-attachment: fixed;
+  color-scheme: light;
+}
+
+body.dark {
+  background-image:
+    radial-gradient(circle at 20% 80%, rgba(100, 100, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 100, 200, 0.1) 0%, transparent 50%);
+  color-scheme: dark;
+}
+
+/* Glass Surfaces */
+.glass-panel {
+  background: var(--glass-bg-light);
+  backdrop-filter: var(--glass-blur-light);
+  border: 1px solid var(--glass-border-light);
+  box-shadow: var(--glass-shadow-light);
+  border-radius: 16px;
+  transition: var(--transition-smooth);
+}
+
+.dark .glass-panel {
+  background: var(--glass-bg-dark);
+  backdrop-filter: var(--glass-blur-dark);
+  border-color: var(--glass-border-dark);
+  box-shadow: var(--glass-shadow-dark);
+}
+
+.glass-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.dark .glass-panel:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Glass Buttons */
+.glass-button {
+  background: var(--glass-bg-light-2);
+  backdrop-filter: var(--glass-blur-light);
+  border: 1px solid var(--glass-border-light);
+  padding: 10px 20px;
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.dark .glass-button {
+  background: var(--glass-bg-dark-2);
+  border-color: var(--glass-border-dark);
+}
+
+.glass-button:hover {
+  background: var(--glass-bg-light-3);
+  transform: scale(1.02);
+}
+
+.dark .glass-button:hover {
+  background: var(--glass-bg-dark-3);
+}
+
+.glass-button:active {
+  transform: scale(0.98);
+}
+
+.glass-button.primary {
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  color: white;
+}
+
+.glass-button.success {
+  background: linear-gradient(135deg, var(--green), #10b981);
+  color: white;
+}
+
+.glass-button.danger {
+  background: linear-gradient(135deg, var(--red), #ef4444);
+  color: white;
+}
+
+/* Glass Cards */
+.glass-card {
+  background: var(--glass-bg-light);
+  backdrop-filter: var(--glass-blur-light);
+  border: 1px solid var(--glass-border-light);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--glass-shadow-light);
+  transition: var(--transition-smooth);
+}
+
+.dark .glass-card {
+  background: var(--glass-bg-dark);
+  border-color: var(--glass-border-dark);
+  box-shadow: var(--glass-shadow-dark);
+}
+
+/* Glow Effects */
+.glow {
+  position: relative;
+}
+
+.glow::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, var(--blue), var(--purple), var(--green));
+  border-radius: 12px;
+  opacity: 0.3;
+  z-index: -1;
+  filter: blur(8px);
+}
+
+.dark .glow::before {
+  opacity: 0.5;
+}
+
+/* Reflection Effects */
+.reflection::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  transform: rotate(45deg);
+  transition: all 0.6s ease;
+  opacity: 0;
+}
+
+.reflection:hover::after {
+  animation: reflect 0.6s ease forwards;
+}
+
+@keyframes reflect {
+  0% { transform: rotate(45deg) translateX(-100%); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: rotate(45deg) translateX(100%); opacity: 0; }
+}
+
+/* Skeleton UI */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 8px;
+}
+
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(50, 50, 60, 0.8) 25%,
+    rgba(60, 60, 70, 0.8) 50%,
+    rgba(50, 50, 60, 0.8) 75%
+  );
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-text {
+  height: 1em;
+  margin: 0.5em 0;
+  width: 100%;
+  border-radius: 4px;
+}
+
+.skeleton-text.short { width: 60%; }
+.skeleton-text.medium { width: 80%; }
+.skeleton-card {
+  height: 120px;
+  margin: 12px 0;
+  border-radius: 12px;
+}
+
+/* Optimistic UI - Immediate Feedback */
+.optimistic-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.optimistic-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: var(--transition-smooth);
+}
+
+.optimistic-exit {
+  opacity: 1;
+}
+
+.optimistic-exit-active {
+  opacity: 0;
+  transition: var(--transition-fast);
+}
+
+/* Progress Illusions */
+.progress-illusion {
+  position: relative;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--purple));
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Platonic Loading States */
+.loading-illusion {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-illusion::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--surface-3), transparent);
+  animation: loading-sweep 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes loading-sweep {
+  0% { left: -100%; }
+  50% { left: 100%; }
+  100% { left: 100%; }
+}
+
+/* Immediate Response Pattern */
+.immediate-response {
+  animation: pulse 0.3s ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Visual Hierarchy Transitions */
+.slide-in {
+  animation: slideInFromBottom 0.4s var(--animation-bounce);
+}
+
+@keyframes slideInFromBottom {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Ripple Effects for Interactions */
+.ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.ripple:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+.dark .ripple::before {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Connection Lines for Visual Flow */
+.connection-line {
+  position: relative;
+}
+
+.connection-line::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+
+/* Morphic Shadows */
+.morphic-shadow {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.dark .morphic-shadow {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}

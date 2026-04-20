@@ -1,0 +1,301 @@
+/* === OpenAGI Complete Design System === */
+/* Glassmorphism Theme with Skeleton + Optimistic UI */
+
+/* ===== 1. CORE THEME VARIABLES ===== */
+:root {
+  /* LIGHT THEME (Default) */
+  --bg: #f8fafc;
+  --surface-1: rgba(248, 250, 252, 0.7);
+  --surface-2: rgba(241, 245, 249, 0.85);
+  --surface-3: rgba(226, 232, 240, 0.65);
+  --surface-4: rgba(255, 255, 255, 0.9);
+
+  --border: rgba(71, 85, 105, 0.1);
+  --border-bright: rgba(71, 85, 105, 0.2);
+
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+
+  --blue: #3b82f6;
+  --blue-dim: rgba(59, 130, 246, 0.12);
+  --green: #10b981;
+  --cyan: #06b6d4;
+  --purple: #8b5cf6;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+
+  --blur: blur(20px);
+  --blur-sm: blur(12px);
+  --blur-lg: blur(32px);
+  --radius: 16px;
+  --radius-sm: 12px;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.15s ease;
+}
+
+/* DARK THEME */
+html.dark {
+  --bg: #020617;
+  --surface-1: rgba(15, 23, 42, 0.7);
+  --surface-2: rgba(30, 41, 59, 0.85);
+  --surface-3: rgba(51, 65, 85, 0.65);
+  --surface-4: rgba(30, 41, 59, 0.9);
+
+  --border: rgba(148, 163, 184, 0.1);
+  --border-bright: rgba(148, 163, 184, 0.2);
+
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  --blue: #60a5fa;
+  --blue-dim: rgba(96, 165, 250, 0.15);
+}
+
+/* ===== 2. BASE STYLES ===== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  background-image:
+    radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+  background-attachment: fixed;
+  color: var(--text);
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+body.dark {
+  background-image:
+    radial-gradient(circle at 20% 80%, rgba(96, 165, 250, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(167, 139, 250, 0.08) 0%, transparent 50%);
+}
+
+/* ===== 3. GLASS SURFACES ===== */
+.glass-panel {
+  background: var(--surface-1);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--surface-2);
+  z-index: -1;
+  opacity: 0.3;
+}
+
+.dark .glass-panel::before {
+  opacity: 0.1;
+}
+
+.glass-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  border-color: var(--border-bright);
+}
+
+/* ===== 4. BUTTONS ===== */
+.glass-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background: var(--surface-2);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  overflow: hidden;
+}
+
+.glass-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.1));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.glass-button:hover::before {
+  opacity: 1;
+}
+
+.glass-button:hover {
+  background: var(--surface-3);
+  border-color: var(--border-bright);
+}
+
+.glass-button:active {
+  transform: scale(0.98);
+}
+
+/* ===== 5. TRANSITIONS ===== */
+.fade-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: var(--transition);
+}
+
+.slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 6. SKELETON LOADING ===== */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+  height: 120px;
+  margin: 12px 0;
+  border-radius: var(--radius);
+}
+
+.skeleton-text {
+  height: 1em;
+  margin: 0.5em 0;
+  border-radius: 4px;
+}
+
+.skeleton-text.short { width: 60%; }
+.skeleton-text.medium { width: 80%; }
+.skeleton-text.long { width: 100%; }
+
+/* ===== 7. PAGE LAYOUTS (Fix Black Pages) ===== */
+.page-container {
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content {
+  flex: 1;
+  background: var(--surface-1);
+  backdrop-filter: var(--blur-sm);
+  border-top: 1px solid var(--border);
+}
+
+.dashboardContainer,
+.historyContainer,
+.toolsContainer,
+.skillsContainer {
+  min-height: 100vh;
+  background: transparent;
+  padding: 24px;
+}
+
+/* ===== 8. CARD COMPONENTS ===== */
+.card {
+  background: var(--surface-2);
+  backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: var(--transition-fast);
+}
+
+.card:hover {
+  background: var(--surface-3);
+  border-color: var(--border-bright);
+}
+
+/* ===== 9. RESPONSIVE ===== */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== 10. SPECIAL EFFECTS ===== */
+/* Glow effect */
+.glow {
+  position: relative;
+}
+
+.glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, var(--blue), transparent 70%);
+  opacity: 0.3;
+  pointer-events: none;
+  animation: pulse 3s ease-in-out infinite;
+}
+
+/* === Glassmorphism Theme Switching === */
+/* Import our glass effect CSS */
+@import './styles/glassmorphism.css';
+
+/* Apply glass to common elements */
+.glass-header,
+.glass-sidebar,
+.glass-main {
+  background: var(--surface-1);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+}

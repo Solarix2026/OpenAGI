@@ -110,6 +110,31 @@ Disclaimer: Educational analysis only, not financial advice."""
             "disclaimer": "Educational only. Not financial advice."
         }
 
+    def get_realtime_quote(self, ticker: str) -> dict:
+        """Try Alpha Vantage for realtime (free tier: 25 calls/day). Fallback to yfinance (15min delayed)."""
+        import os
+        av_key = os.getenv("ALPHA_VANTAGE_KEY")
+        if av_key:
+            try:
+                import requests
+                url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={av_key}"
+                r = requests.get(url, timeout=10)
+                data = r.json().get("Global Quote", {})
+                if data:
+                    return {
+                        "success": True,
+                        "ticker": ticker,
+                        "price": float(data.get("05. price", 0)),
+                        "change_pct": data.get("10. change percent", "0%"),
+                        "volume": data.get("06. volume", "0"),
+                        "source": "realtime",
+                        "note": "Alpha Vantage realtime"
+                    }
+            except Exception as e:
+                log.debug(f"Alpha Vantage failed: {e}")
+        # Fallback: yfinance (15min delay)
+        return self.get_stock_data(ticker)
+
     def register_as_tool(self, registry):
         """Register analyze_stock as a tool in the executor registry."""
         engine = self

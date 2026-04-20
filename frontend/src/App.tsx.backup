@@ -1,0 +1,160 @@
+import { useState, useCallback, useEffect } from 'react';
+import { Icon, Icons, ThemeToggle } from './components/common';
+import { WebSocketProvider } from './context/WebSocketContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
+import { ChatPage } from './pages/Chat';
+import { ChatV2Page } from './pages/ChatV2';
+import { DashboardPage } from './pages/Dashboard';
+import { DashboardV2Page } from './pages/DashboardV2';
+import { HistoryPage } from './pages/History';
+import { HistoryV2Page } from './pages/HistoryV2';
+import { ChannelsPage } from './pages/Channels';
+import { ToolsPage } from './pages/Tools';
+import { SkillsPage } from './pages/Skills';
+import { GoalsPage } from './pages/Goals';
+import { LogsPage } from './pages/Logs';
+import { MemoryPage } from './pages/Memory';
+import { SettingsModal } from './components/modals/SettingsModal';
+import { CommandPalette } from './components/common';
+import { RightPanel } from './components/layout';
+import './styles/globals.css';
+import styles from './App.module.css';
+
+type Page = 'chat' | 'dashboard' | 'history' | 'channels' | 'tools' | 'skills' | 'goals' | 'logs' | 'memory';
+
+const navItems = [
+  { id: 'chat' as const, label: 'Chat', icon: Icons.chat },
+  { id: 'dashboard' as const, label: 'Dashboard', icon: Icons.dashboard },
+  { id: 'history' as const, label: 'History', icon: Icons.history },
+  { id: 'channels' as const, label: 'Channels', icon: Icons.channels },
+  { id: 'tools' as const, label: 'Tools', icon: Icons.tools },
+  { id: 'skills' as const, label: 'Skills', icon: Icons.skills },
+  { id: 'goals' as const, label: 'Goals', icon: Icons.goals },
+  { id: 'logs' as const, label: 'Logs', icon: Icons.logs },
+  { id: 'memory' as const, label: 'Memory', icon: Icons.memory },
+];
+
+function AppContent() {
+  const [currentPage, setCurrentPage] = useState<Page>('chat');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isCmdOpen, setIsCmdOpen] = useState(false);
+  const { openSettings } = useSettings();
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  // Update state when fullscreen changes via ESC key
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCmdOpen(true);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [toggleFullscreen]);
+
+  return (
+    <div className={styles.root}>
+      <header className={styles.header}>
+        <div className={styles.headerLeft}>
+          <h1>OpenAGI</h1>
+          <span className={styles.version}>v5.5</span>
+        </div>
+        <div className={styles.headerRight}>
+          <button className={styles.cmdBtn} onClick={() => setIsCmdOpen(true)} title="Command Palette (⌘K)">
+            <Icon icon={Icons.search} size="md" />
+            <span>Commands</span>
+            <kbd>⌘K</kbd>
+          </button>
+      <ThemeToggle />
+          <button className={styles.iconBtn} onClick={toggleFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}>
+            <Icon icon={isFullscreen ? Icons.compress : Icons.expand} size="md" />
+          </button>
+          <button className={styles.settingsBtn} onClick={openSettings} title="Settings">
+            <Icon icon={Icons.settings} size="md" />
+          </button>
+        </div>
+      </header>
+
+      <div className={styles.main}>
+        <aside className={styles.sidebar}>
+          <nav className={styles.navSection}>
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                className={`${styles.navItem} ${currentPage === item.id ? styles.active : ''}`}
+                onClick={() => setCurrentPage(item.id)}
+              >
+                <Icon icon={item.icon} size="md" />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className={styles.navFooter}>
+            <div className={styles.footerInfo}>
+              <span><Icon icon={Icons.tools} size="sm" /> 24 tools</span>
+              <span><Icon icon={Icons.goals} size="sm" /> 3 goals</span>
+            </div>
+          </div>
+        </aside>
+
+        <main className={styles.content}>
+          {currentPage === 'chat' && <ChatPage />}
+          {currentPage === 'dashboard' && <DashboardPage />}
+          {currentPage === 'history' && <HistoryPage />}
+          {currentPage === 'channels' && <ChannelsPage />}
+          {currentPage === 'tools' && <ToolsPage />}
+          {currentPage === 'skills' && <SkillsPage />}
+          {currentPage === 'goals' && <GoalsPage />}
+          {currentPage === 'logs' && <LogsPage />}
+          {currentPage === 'memory' && <MemoryPage />}
+        </main>
+      </div>
+
+      <CommandPalette
+        isOpen={isCmdOpen}
+        onClose={() => setIsCmdOpen(false)}
+        onExecute={(cmd) => {
+          if (cmd.startsWith('mode-')) {
+            const mode = cmd.replace('mode-', '');
+            // Handle mode change
+          }
+        }}
+      />
+      <SettingsModal />
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <SettingsProvider>
+        <WebSocketProvider>
+          <AppContent />
+        </WebSocketProvider>
+      </SettingsProvider>
+    </ThemeProvider>
+  );
+}
+
+export default App;

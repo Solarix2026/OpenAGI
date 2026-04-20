@@ -142,6 +142,7 @@ class SkillLibrary:
 
     def create_skill_from_conversation(self, history: list[dict]) -> dict:
         """Extract a reusable skill from conversation history using LLM."""
+        import time
         prompt = f"""Analyze this conversation and extract a reusable AI skill.
 
 Conversation: {json.dumps(history, ensure_ascii=False)}

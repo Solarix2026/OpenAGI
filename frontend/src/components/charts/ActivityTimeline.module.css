@@ -1,0 +1,190 @@
+/* Activity Timeline Styles - Phase 2 Dashboard Polish */
+
+.timelineContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+.timelineItem {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-left: 2px solid transparent;
+}
+
+.timelineItem:hover {
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  transform: translateX(4px);
+}
+
+.timelineItem.expanded {
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  margin: 8px 0;
+}
+
+.timelineLine {
+  position: relative;
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lineConnector {
+  flex: 1;
+  width: 2px;
+  background: var(--border);
+  margin-top: 4px;
+}
+
+.timelineDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.eventContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eventHeader {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.eventTime {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.eventType {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  color: white;
+}
+
+.importanceBadge {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--yellow);
+  margin-left: 4px;
+}
+
+.eventContentText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eventTitle {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.eventMetadata {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.dateLabel {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.important {
+  color: var(--yellow);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.eventDetails {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.fullContent {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
+.embeddingInfo {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.expandToggle {
+  font-size: 11px;
+  color: var(--blue);
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  align-self: flex-start;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.expandToggle:hover {
+  background: var(--blue-dim);
+}
+
+.emptyTimeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.emptyIcon {
+  font-size: 24px;
+  opacity: 0.5;
+}
+
+.emptyText {
+  font-size: 13px;
+  font-weight: 500;
+}

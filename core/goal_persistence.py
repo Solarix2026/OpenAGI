@@ -50,7 +50,43 @@ def add_to_goal_queue(description: str, priority: float = 0.5, source: str = "us
     if memory:
         memory.log_event("goal_added", description, {"id": goal["id"]}, importance=0.7)
 
+    # Broadcast via WebSocket if available
+    _broadcast_ws_event("goal_created", goal)
+
     return goal
+
+
+def update_goal_status(goal_id: str, status: str, result: str = "", memory=None, ws_broadcast_fn=None):
+    """Update goal status and optionally broadcast via WebSocket."""
+    goals = _load()
+    goal = None
+    for g in goals:
+        if g["id"] == goal_id:
+            g["status"] = status
+            g["result"] = result
+            g["updated"] = datetime.now().isoformat()
+            goal = g
+            break
+    _save(goals)
+
+    if ws_broadcast_fn and goal:
+        ws_broadcast_fn("goal_update", goal)
+    else:
+        # Broadcast via WebSocket if available
+        _broadcast_ws_event("goal_update", goal)
+
+
+def _broadcast_ws_event(event_type: str, payload: dict):
+    """Broadcast event to WebSocket clients if _webui_push is available."""
+    try:
+        # Try to find _webui_push via module globals
+        import sys
+        for mod in sys.modules.values():
+            if hasattr(mod, '_webui_push') and mod._webui_push:
+                mod._webui_push(json.dumps({"type": event_type, event_type.replace("_", "")[:-1]: payload}))
+                break
+    except Exception:
+        pass
 
 
 def update_goal_status(goal_id: str, status: str, result: str = "", memory=None):

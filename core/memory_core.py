@@ -21,10 +21,21 @@ log = logging.getLogger("Memory")
 
 # Global model cache — load ONCE, reuse forever
 _EMBEDDING_MODEL = None
+_EMBEDDING_LOAD_ATTEMPTED = False
 
 def _get_embedding_model():
-    """Get cached SentenceTransformer model (loads only once)."""
-    global _EMBEDDING_MODEL
+    """Get cached SentenceTransformer model (loads only once, deferred)."""
+    global _EMBEDDING_MODEL, _EMBEDDING_LOAD_ATTEMPTED
+    if _EMBEDDING_LOAD_ATTEMPTED:
+        return _EMBEDDING_MODEL
+    _EMBEDDING_LOAD_ATTEMPTED = True
+
+    # Skip on Python 3.14+ due to transformers/importlib.metadata incompatibility
+    import sys
+    if sys.version_info >= (3, 14) and not os.environ.get("FORCE_EMBEDDINGS"):
+        log.warning("Python 3.14+ detected - embeddings disabled (set FORCE_EMBEDDINGS=1 to override)")
+        return None
+
     if _EMBEDDING_MODEL is None:
         try:
             from sentence_transformers import SentenceTransformer
@@ -99,6 +110,24 @@ class AgentMemory:
                 CREATE INDEX IF NOT EXISTS idx_ep_type ON episodic(event_type);
                 CREATE INDEX IF NOT EXISTS idx_ep_ts ON episodic(ts);
                 CREATE INDEX IF NOT EXISTS idx_proc_tool ON procedural(tool);
+
+-- Chat Sessions for multi-session history
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id TEXT PRIMARY KEY,
+    title TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    last_message_at TEXT DEFAULT (datetime('now')),
+    message_count INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS session_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT,
+    role TEXT,
+    content TEXT,
+    ts TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+);
+CREATE INDEX IF NOT EXISTS idx_session_msgs ON session_messages(session_id, ts);
             """)
             self._conn.commit()
 
@@ -372,3 +401,64 @@ Return JSON: {{"nodes": [{{"summary": "...", "topic": "...", "importance": 0.0-1
         except Exception:
             pass
         return ""
+
+    # ── Session Management ────────────────────────────────────────
+
+    def create_session(self, title: str = "New Chat") -> str:
+        """Create a new chat session."""
+        import uuid
+        session_id = str(uuid.uuid4())[:8]
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO chat_sessions(id, title) VALUES (?, ?)",
+                (session_id, title)
+            )
+            self._conn.commit()
+        return session_id
+
+    def add_session_message(self, session_id: str, role: str, content: str):
+        """Add a message to a session."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO session_messages(session_id, role, content) VALUES (?, ?, ?)",
+                (session_id, role, content[:4000])
+            )
+            self._conn.execute(
+                "UPDATE chat_sessions SET last_message_at=datetime('now'), message_count=message_count+1 WHERE id=?",
+                (session_id,)
+            )
+            self._conn.commit()
+
+    def get_session_messages(self, session_id: str, limit: int = 50) -> list:
+        """Get messages from a session."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT role, content, ts FROM session_messages WHERE session_id=? ORDER BY ts ASC LIMIT ?",
+                (session_id, limit)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def list_sessions(self, limit: int = 20) -> list:
+        """List all sessions ordered by last activity."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, title, created_at, last_message_at, message_count FROM chat_sessions ORDER BY last_message_at DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def update_session_title(self, session_id: str, title: str):
+        """Update session title."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE chat_sessions SET title=? WHERE id=?",
+                (title[:60], session_id)
+            )
+            self._conn.commit()
+
+    def auto_title_session(self, session_id: str, first_message: str):
+        """Generate short title from first user message."""
+        title = first_message[:40].strip()
+        if len(first_message) > 40:
+            title += "..."
+        self.update_session_title(session_id, title)

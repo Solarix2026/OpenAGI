@@ -53,26 +53,29 @@ WORKSPACE = Path(os.getenv("WORKSPACE", "./workspace"))
 WORKSPACE.mkdir(parents=True, exist_ok=True)
 MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "8"))
 
-SYSTEM_PROMPT = """You are OpenAGI — an autonomous intelligence assistant with a Jarvis personality.
+SYSTEM_PROMPT = """You are OpenAGI — an autonomous intelligence with full computer control, persistent memory, and a team of specialized AI agents.
 
-CORE BEHAVIOR:
-- Reply in the user's language (English or Chinese) automatically
-- Be precise, warm, and never verbose — every word earns its place
-- When a question hides a deeper need, surface it with ONE sharp question rather than answering the surface request
-- Never preach, never moralize, never bullet-point unsolicited advice
-- Treat the user as an intellectual equal
+## Identity
+You are the central intelligence of an autonomous system. You think, plan, and act — not just respond.
+Speak in the user's language (English or Chinese) automatically.
+Be direct, precise, warm. Never verbose. Every word earns its place.
 
-THINKING STYLE:
-- Simple requests → execute, then confirm briefly
-- Ambiguous requests → ask one clarifying question before proceeding
-- Deep questions → identify the real tension before answering
-- Failed tool → explain concisely, offer alternative, don't over-apologize
+## Capabilities
+- You have tools: use them without being asked when they would help
+- You have memory: reference past conversations naturally
+- You have agents: hire/delegate when the task benefits from specialization
+- You control the computer: take screenshots, open apps, fill forms
+- You can schedule tasks: set them up and notify when done
 
-IDENTITY:
-- You have memory across sessions
-- You can take actions on the computer
-- You monitor the world and proactively surface relevant information
-- You get smarter from each interaction
+## Guardrails (Non-negotiable)
+- Never execute irreversible actions (payments, deletions, form submissions) without confirming with user
+- Never store or transmit API keys or passwords
+- When uncertain about intent on destructive actions, ask once then proceed
+
+## Autonomy
+Act intelligently. When you know what to do, do it. Don't ask permission for obvious steps.
+If a task needs 5 steps, take them — report what you did, not ask before each step.
+Use tools proactively: if answering a question would benefit from a web search, search first then answer.
 """
 
 
@@ -82,7 +85,18 @@ class Kernel:
         self.memory = AgentMemory(str(WORKSPACE))
         self.executor = ToolExecutor(str(WORKSPACE), memory=self.memory)
         self.semantic = SemanticEngine(self.executor.registry)
+
+        # Mode manager
+        try:
+            from core.mode_manager import ModeManager
+            self.mode_manager = ModeManager()
+            log.info("🎯 ModeManager ready")
+        except ImportError:
+            self.mode_manager = None
+
         self.history = []
+        self._current_session_id = self.memory.create_session("New Chat")
+        log.info(f"[SESSION] Started session: {self._current_session_id}")
 
         # Config loader for hybrid extraction
         try:
@@ -152,26 +166,6 @@ class Kernel:
         except ImportError:
             self.innovation = None
 
-        # Recipe engine + skill library
-        try:
-            from agentic.recipe_engine import RecipeEngine
-            from agentic.skill_library import SkillLibrary
-            self.recipes = RecipeEngine()
-            self.skills = SkillLibrary()
-            for name in self.skills.list_skills():
-                self.recipes.recipe_to_tool(name, self.executor)
-            log.info(f"📚 {len(self.skills.list_skills())} skills loaded")
-        except ImportError:
-            self.recipes = None
-            self.skills = None
-
-        # Subagent manager
-        try:
-            from agentic.subagent_manager import SubagentManager
-            self.subagents = SubagentManager(self)
-        except ImportError:
-            self.subagents = None
-
         # ── Autonomy tier ────────────────────────────────────────
         try:
             from core.goal_alignment_monitor import GoalAlignmentMonitor
@@ -202,8 +196,8 @@ class Kernel:
         try:
             from autonomy.proactive_engine import ProactiveEngine
             self.proactive = ProactiveEngine(self)
-            self.proactive.start()
-            log.info("🔁 ProactiveEngine started")
+            # Don't start here - only start in run_telegram()
+            log.info("🔁 ProactiveEngine ready (not started)")
         except ImportError:
             self.proactive = None
 
@@ -211,6 +205,9 @@ class Kernel:
         try:
             from evolution.metacognition import MetacognitiveEngine
             self.meta = MetacognitiveEngine(self.memory)
+            # F1: Wire metacognition to executor for capability feedback loop
+            if self.executor:
+                self.executor.set_metacognition(self.meta)
         except ImportError:
             self.meta = None
 
@@ -259,6 +256,21 @@ class Kernel:
             log.debug(f"FinanceEngine not available: {e}")
             self.finance = None
 
+        # Register worldbank and arxiv tools
+        try:
+            from core.worldbank_client import register_worldbank_tool
+            register_worldbank_tool(self.executor.registry)
+            log.info("World Bank data tool registered")
+        except ImportError as e:
+            log.debug(f"WorldBank client not available: {e}")
+
+        try:
+            from core.arxiv_client import register_arxiv_tool
+            register_arxiv_tool(self.executor.registry)
+            log.info("arXiv search tool registered")
+        except ImportError as e:
+            log.debug(f"arXiv client not available: {e}")
+
         # ── Agentic workflow tier ────────────────────────────────
         try:
             from agentic.dag_workflow import DAGWorkflowEngine
@@ -278,13 +290,6 @@ class Kernel:
         except ImportError:
             self.recipes = None
             self.skills = None
-
-        try:
-            from agentic.subagent_manager import SubagentManager
-            self.subagents = SubagentManager(self)
-            self.subagents.register_as_tool(self.executor.registry)
-        except ImportError:
-            self.subagents = None
 
         # ── Computer control tier ────────────────────────────────
         try:
@@ -308,8 +313,25 @@ class Kernel:
             self.browser = BrowserAgent(self.vision)
             self.browser.register_as_tool(self.executor.registry)
             log.info("🌐 BrowserAgent ready")
+
+            # Workflow Executor for complex multi-step tasks (requires browser)
+            try:
+                from control.workflow_executor import WorkflowExecutor
+                self.workflow = WorkflowExecutor(
+                    computer_control=self.computer,
+                    browser_agent=self.browser,
+                    vision_engine=self.vision,
+                    notify_fn=self._webui_push if hasattr(self, "_webui_push") else None
+                )
+                self.workflow.register_as_tool(self.executor.registry, lambda msg: True)
+                log.info("✈️ WorkflowExecutor ready (browser_workflow, book_flight)")
+            except ImportError as e:
+                self.workflow = None
+                log.debug(f"WorkflowExecutor skip: {e}")
+
         except ImportError:
             self.browser = None
+            self.workflow = None
 
         # ── Interface tier ───────────────────────────────────────
         try:
@@ -523,26 +545,34 @@ class Kernel:
             return self._generate_response(user_input, self.history[-MAX_HISTORY_TURNS*2:], ctx_str)
 
     def _run_action(self, user_input: str, intent: dict, ctx_str: str = "") -> str:
-        """Execute tool, then generate NVIDIA response with result context.
-        NO special branches - all tools handled uniformly."""
+        """Execute tool, then generate NVIDIA response with result context."""
         import concurrent.futures
         action = intent.get("action")
         params = intent.get("parameters", {})
 
-        # Timeout lookup (no special if-else, just config)
+        # Extended timeouts for slow operations
         TIMEOUTS = {
             "innovate": 90,
             "evolve": 90,
             "dag_execute": 120,
             "invent_tool": 90,
             "reason": 60,
+            "browser_workflow": 120,
+            "book_flight": 120,
+            "computer_do": 90,
         }
         timeout = TIMEOUTS.get(action, 30)
 
-        # Progress notification for slow tools
-        SLOW_TOOLS = {"innovate", "evolve", "dag_execute", "invent_tool"}
-        if action in SLOW_TOOLS:
-            log.info(f"⚡ {action} in progress... ({timeout}s max)")
+        # Auto-screenshot for complex computer/browser tasks
+        VISUAL_TASKS = {"computer_do", "browser_workflow", "book_flight", "browser_do", "browser_navigate"}
+        should_screenshot = action in VISUAL_TASKS and self.computer
+        screenshot_before = None
+        if should_screenshot:
+            try:
+                screenshot_before = self.computer.screenshot()
+                log.info(f"[AUTO-SS] Before screenshot: {screenshot_before}")
+            except Exception:
+                pass
 
         # Execute with timeout
         def execute_tool():
@@ -559,9 +589,31 @@ class Kernel:
 
         log.info(f"[TOOL] {action} → success={result.get('success')}")
 
-        # Handle world_events special (non-blocking, always same tool)
-        if action == "world_events" and result.get("success") and self.worldmonitor:
-            self.worldmonitor.open_dashboard()
+        # Auto-screenshot after visual tasks
+        if should_screenshot and result.get("success"):
+            try:
+                import time
+                time.sleep(1)  # Let UI settle
+                screenshot_after = self.computer.screenshot()
+                # Analyze what changed using vision
+                if screenshot_after and self.vision:
+                    from core.llm_gateway import call_vision
+                    description = call_vision(
+                        [{"role": "user", "content": f"Briefly describe what was accomplished on screen after: '{user_input}'. 1-2 sentences."}],
+                        image_path=screenshot_after,
+                        max_tokens=100
+                    )
+                    result["screenshot"] = screenshot_after
+                    result["visual_summary"] = description
+                    # Push screenshot preview to WebUI
+                    if hasattr(self, '_webui_push') and self._webui_push:
+                        self._webui_push(f"📸 Progress: {description}")
+                    log.info(f"[AUTO-SS] After screenshot taken")
+            except Exception as e:
+                log.debug(f"Auto-screenshot failed: {e}")
+
+        # Goal auto-tick: check if this action completes any pending goal
+        self._try_auto_complete_goal(user_input, result)
 
         # Build context for NVIDIA response
         mem_ctx = self.memory.get_relevant_memory_context(user_input)
@@ -714,6 +766,43 @@ class Kernel:
 
         return response
 
+    def _try_auto_complete_goal(self, user_input: str, result: dict):
+        """Check if completed action matches any pending goal. Auto-mark it complete if so."""
+        if not result.get("success"):
+            return
+        try:
+            from core.goal_persistence import load_goal_queue, update_goal_status
+            from core.llm_gateway import call_groq_router
+            import re, json
+            goals = load_goal_queue()
+            pending = [g for g in goals if g.get("status") == "pending"]
+            if not pending:
+                return
+            # Quick check: does this action relate to any pending goal?
+            goals_text = "\n".join(f"{g['id']}: {g['description'][:60]}" for g in pending[:5])
+            prompt = f"""Did this user action complete any pending goal?
+User did: "{user_input}"
+Result: {"success" if result.get("success") else "failed"}
+Pending goals: {goals_text}
+Return JSON: {{"completed_goal_id": "goal_id or null", "confidence": 0.0-1.0}}
+Only mark complete if clearly and directly accomplished."""
+            raw = call_groq_router([{"role": "user", "content": prompt}], max_tokens=80)
+            m = re.search(r'\{.*\}', raw, re.DOTALL)
+            if m:
+                data = json.loads(m.group(0))
+                goal_id = data.get("completed_goal_id")
+                confidence = data.get("confidence", 0)
+                if goal_id and confidence >= 0.7:
+                    update_goal_status(goal_id, "completed", f"Auto-completed by: {user_input[:80]}", memory=self.memory)
+                    log.info(f"[GOAL] Auto-ticked: {goal_id} (confidence={confidence:.2f})")
+                    # Notify WebUI
+                    if hasattr(self, '_webui_push') and self._webui_push:
+                        goal = next((g for g in pending if g["id"] == goal_id), None)
+                        if goal:
+                            self._webui_push(f"✅ Goal completed: {goal['description'][:60]}")
+        except Exception as e:
+            log.debug(f"Goal auto-tick failed: {e}")
+
     # ── Helpers ─────────────────────────────────────────────────────
 
     def _store_fact_from_config(self, fact: dict, original_text: str) -> None:
@@ -784,9 +873,13 @@ class Kernel:
         # Use Agentic RAG if available (v5.4+)
         if hasattr(self, '_agentic_rag') and self._agentic_rag:
             try:
+                # FIX: was self.mode, now self.mode_manager
+                is_conversation = False
+                if hasattr(self, 'mode_manager') and self.mode_manager:
+                    is_conversation = str(self.mode_manager.current).lower() in ('auto', 'conversation')
                 context, meta = self._agentic_rag.retrieve(
                     query,
-                    max_budget_ms=200 if self.mode and str(self.mode.current) == "conversation" else 100
+                    max_budget_ms=200 if is_conversation else 100
                 )
                 if context:
                     return context
@@ -802,7 +895,33 @@ class Kernel:
         # Keep history bounded
         if len(self.history) > MAX_HISTORY_TURNS * 2:
             self.history = self.history[-(MAX_HISTORY_TURNS * 2):]
+        # Persist to session storage
+        if hasattr(self, '_current_session_id') and self._current_session_id:
+            self.memory.add_session_message(self._current_session_id, "user", user_input)
+            self.memory.add_session_message(self._current_session_id, "assistant", response)
+            # Auto-title after first exchange
+            msgs = self.memory.get_session_messages(self._current_session_id)
+            if len(msgs) == 2:
+                self.memory.auto_title_session(self._current_session_id, user_input)
 
+            self.memory.auto_title_session(self._current_session_id, user_input)
+
+    def new_chat(self) -> str:
+        """Start a new chat session. Memory shared. History reset."""
+        self.history.clear()
+        self._current_session_id = self.memory.create_session("New Chat")
+        log.info(f"[SESSION] New session: {self._current_session_id}")
+        return self._current_session_id
+
+    def load_session(self, session_id: str) -> bool:
+        """Load a previous chat session into active history."""
+        messages = self.memory.get_session_messages(session_id, limit=50)
+        if not messages:
+            return False
+        self.history = [{"role": m["role"], "content": m["content"]} for m in messages]
+        self._current_session_id = session_id
+        log.info(f"[SESSION] Loaded session: {session_id} ({len(messages)} messages)")
+        return True
     def _status_report(self) -> str:
         tools = self.executor.registry.list_tools()
         pending = get_pending_count()
@@ -848,6 +967,12 @@ class Kernel:
         """Telegram bot mode."""
         import threading
         from core.llm_gateway import send_telegram_alert, get_telegram_updates
+
+        # Start ProactiveEngine only in Telegram mode
+        if self.proactive:
+            self.proactive.start()
+            log.info("🔁 ProactiveEngine started (Telegram mode)")
+
         log.info("📱 Telegram mode started")
         send_telegram_alert("✅ OpenAGI online. Send me a message.")
 
@@ -931,21 +1056,76 @@ class Kernel:
             pass
 
     def run_web(self):
-        """Web UI mode with QR code phone bridge."""
+        """Web UI mode - auto builds React frontend and starts backend."""
         try:
-            # Import from project root, not relative to core package
             import sys
+            import subprocess
             from pathlib import Path
+
             project_root = Path(__file__).parent.parent
             if str(project_root) not in sys.path:
                 sys.path.insert(0, str(project_root))
+
+            # ─── AUTO BUILD FRONTEND ────────────────────────────────────
+            frontend_dir = project_root / "frontend"
+            frontend_dist = frontend_dir / "dist"
+
+            if frontend_dir.exists():
+                print("\n" + "="*60)
+                print("  🚀 OpenAGI Web UI")
+                print("="*60)
+
+                # Check if dist exists, if not build
+                if not frontend_dist.exists():
+                    print("\n📦 Building React frontend (first time only)...")
+                    try:
+                        # Check if node_modules exists
+                        if not (frontend_dir / "node_modules").exists():
+                            print("   Installing npm dependencies...")
+                            subprocess.run(
+                                ["npm", "install"],
+                                cwd=str(frontend_dir),
+                                capture_output=True,
+                                check=True
+                            )
+
+                        # Build frontend
+                        result = subprocess.run(
+                            ["npm", "run", "build"],
+                            cwd=str(frontend_dir),
+                            capture_output=True,
+                            text=True,
+                            check=True
+                        )
+                        print("   ✅ Frontend built successfully!")
+                    except subprocess.CalledProcessError as e:
+                        print(f"   ❌ Frontend build failed: {e.stderr}")
+                        raise
+                    except FileNotFoundError:
+                        print("   ⚠️  npm not found. Please install Node.js")
+                        raise
+                else:
+                    print("   ✅ Using existing frontend build")
+
+                print("\n🔌 Starting backend server on http://localhost:8765")
+                print("   WebSocket: ws://localhost:8765/ws")
+                print("   Frontend: http://localhost:8765")
+                print("\n" + "="*60 + "\n")
+            else:
+                print("⚠️  frontend/ directory not found")
+
+            # ─── START BACKEND ──────────────────────────────────────────
             from interfaces.webui_server import WebUIServer
             self.webui = WebUIServer(self)
             self.webui.start()  # This blocks on uvicorn.run()
+
         except ImportError as e:
             log.error(f"webui_server import failed: {e}")
             log.info("Install dependencies: pip install fastapi uvicorn qrcode[pil]")
-            raise  # Re-raise so the error is visible
+            raise
+        except Exception as e:
+            log.error(f"Web UI startup failed: {e}")
+            raise
 
     def run_cli(self):
         """Interactive CLI mode."""

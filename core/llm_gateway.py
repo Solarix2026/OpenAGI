@@ -7,7 +7,7 @@ llm_gateway.py — LLM routing layer
 
 ARCHITECTURE LAW:
 Groq = routing/classification only → returns JSON, never prose
-NVIDIA NIM = primary brain (Kimi k2.5 from NVIDIA NIM)
+NVIDIA NIM = primary brain (Kimi k2-instruct from NVIDIA NIM - STABLE)
 If NVIDIA fails → Groq 70B fallback
 If Groq fails → raise (routing is critical path)
 """
@@ -24,6 +24,9 @@ GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile" # prose fallback
 # NVIDIA NIM - Kimi k2.5 as primary
 NVIDIA_MAIN_MODEL = os.getenv("NVIDIA_MAIN_MODEL", "moonshotai/kimi-k2-instruct")
 NVIDIA_FAST_MODEL = os.getenv("NVIDIA_FAST_MODEL", "moonshotai/kimi-k2-instruct")  # Llama EOL, use Kimi for fast too
+
+# Vision model - separate because Kimi k2 has no vision support
+NVIDIA_VISION_MODEL = os.getenv("NVIDIA_VISION_MODEL", "meta/llama-3.2-90b-vision-instruct")
 
 _groq_client = None
 _nvidia_client = None
@@ -62,7 +65,12 @@ def call_groq_router(messages: list, max_tokens=250) -> str:
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        log.error(f"Groq router failed: {e}")
+        import traceback
+        error_type = type(e).__name__
+        error_msg = str(e)
+        trace = traceback.format_exc()
+        log.error(f"[ROUTER] {GROQ_ROUTER_MODEL} failed [{error_type}]: {error_msg}")
+        log.debug(f"[TRACE] Groq Router:\n{trace}")
         raise
 
 
@@ -103,9 +111,20 @@ def call_nvidia(messages: list, max_tokens=1200, temperature=0.7, fast=False, st
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-            return resp.choices[0].message.content.strip()
+            content = resp.choices[0].message.content
+            # Handle None content from Kimi k2
+            if content is None:
+                log.warning(f"[MODEL] {model} returned None content, using fallback")
+                return call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
+            return content.strip()
     except Exception as e:
-        log.warning(f"NVIDIA/Kimi failed ({e}), falling back to Groq 70B")
+        import traceback
+        error_type = type(e).__name__
+        error_msg = str(e)
+        trace = traceback.format_exc()
+        log.warning(f"[MODEL] {model} failed [{error_type}]: {error_msg}")
+        log.debug(f"[TRACE] NVIDIA {model}:\n{trace}")
+        log.info(f"[FALLBACK] Using Groq 70B instead of {model}")
         return call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
 
 
@@ -118,9 +137,20 @@ def call_groq_fallback(messages: list, max_tokens=1200, temperature=0.7) -> str:
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        return resp.choices[0].message.content.strip()
+        content = resp.choices[0].message.content
+        # Handle None content
+        if content is None:
+            log.error(f"[FALLBACK] {GROQ_FALLBACK_MODEL} returned None content")
+            return "I'm having trouble reaching my reasoning engine. Please try again."
+        return content.strip()
     except Exception as e:
-        log.error(f"All LLMs failed: {e}")
+        import traceback
+        error_type = type(e).__name__
+        error_msg = str(e)
+        trace = traceback.format_exc()
+        log.error(f"[FALLBACK] {GROQ_FALLBACK_MODEL} failed [{error_type}]: {error_msg}")
+        log.debug(f"[TRACE] Groq Fallback:\n{trace}")
+        log.error(f"[CRITICAL] All LLMs exhausted. Last error: {error_msg}")
         return "I'm having trouble reaching my reasoning engine. Please try again."
 
 
@@ -132,6 +162,55 @@ def call_groq(messages: list, model=None, max_tokens=500, temperature=0.7) -> st
     if is_json_call:
         return call_groq_router(messages, max_tokens=max_tokens)
     return call_nvidia(messages, max_tokens=max_tokens, temperature=temperature)
+
+
+# ── Vision call (dedicated vision model, never Kimi) ──────────────
+
+def call_vision(messages: list, image_path: str = None, image_b64: str = None, max_tokens: int = 500) -> str:
+    """Dedicated vision call — always uses vision-capable model. Never falls back to Kimi (no vision support)."""
+    if not os.getenv("NVIDIA_API_KEY"):
+        return "Vision requires NVIDIA_API_KEY"
+
+    client = _get_nvidia()
+
+    # Build image content
+    if image_path:
+        import base64
+        from pathlib import Path
+        ext = Path(image_path).suffix.lower().lstrip(".")
+        mime = f"image/{ext}" if ext in ("png", "jpg", "jpeg", "webp") else "image/png"
+        b64 = base64.b64encode(Path(image_path).read_bytes()).decode()
+        image_content = {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+    elif image_b64:
+        image_content = {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}}
+    else:
+        return "No image provided"
+
+    # Inject image into last user message
+    last_msg = messages[-1] if messages else {"role": "user", "content": ""}
+    if isinstance(last_msg.get("content"), str):
+        vision_messages = messages[:-1] + [{
+            "role": "user",
+            "content": [
+                image_content,
+                {"type": "text", "text": last_msg["content"]}
+            ]
+        }]
+    else:
+        vision_messages = messages
+
+    try:
+        resp = client.chat.completions.create(
+            model=NVIDIA_VISION_MODEL,
+            messages=vision_messages,
+            max_tokens=max_tokens,
+            temperature=0.1
+        )
+        content = resp.choices[0].message.content
+        return (content or "").strip()
+    except Exception as e:
+        log.error(f"Vision call failed: {e}")
+        return f"Vision error: {str(e)[:100]}"
 
 
 # ── Telegram helpers ──────────────────────────────────────────────
@@ -230,8 +309,9 @@ def check_providers() -> dict:
 def call_nvidia_streaming(messages: list, max_tokens=1200, temperature=0.7):
     """Generator that yields text chunks for streaming."""
     import logging
+    import traceback
     log = logging.getLogger("LLMGateway")
-    
+
     if not os.getenv("NVIDIA_API_KEY"):
         yield call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
         return
@@ -248,9 +328,17 @@ def call_nvidia_streaming(messages: list, max_tokens=1200, temperature=0.7):
         )
         for chunk in resp:
             if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+                text = chunk.choices[0].delta.content
+                # Skip None content chunks
+                if text is not None:
+                    yield text
     except Exception as e:
-        log.warning(f"NVIDIA streaming failed ({e}), using fallback")
+        error_type = type(e).__name__
+        error_msg = str(e)
+        trace = traceback.format_exc()
+        log.warning(f"[STREAM] {model} failed [{error_type}]: {error_msg}")
+        log.debug(f"[TRACE] NVIDIA Streaming:\n{trace}")
+        log.info(f"[FALLBACK] Streaming from Groq 70B instead of {model}")
         full = call_groq_fallback(messages, max_tokens=max_tokens, temperature=temperature)
         for i in range(0, len(full), 20):
             yield full[i:i+20]

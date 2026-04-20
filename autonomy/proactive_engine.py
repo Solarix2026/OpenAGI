@@ -14,6 +14,7 @@ Key improvements:
 import threading
 import time
 import logging
+import os
 from datetime import datetime
 
 log = logging.getLogger("Proactive")
@@ -133,6 +134,9 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
 
     def _run_cycle(self):
         """Main proactive cycle. Only nudge when user is idle."""
+        # Only send Telegram if Telegram is configured
+        telegram_enabled = bool(os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"))
+
         now = time.time()
         idle_mins = self._get_idle_minutes()
 
@@ -154,7 +158,7 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
                 if immediate[:2]:
                     summaries = [self._format_event_notification(e) for e in immediate[:2]]
                     combined = " Meanwhile, ".join(summaries)
-                    if self.k.notify:
+                    if self.k.notify and telegram_enabled:
                         self.k.notify.send(combined, channels=["telegram"])
                         # BUG-1 FIX: Also send to WebUI
                         if hasattr(self.k, '_webui_push') and self.k._webui_push:
@@ -202,7 +206,7 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
         # ── Auto-execute simple goals ─────────────────────────────
         from core.goal_persistence import get_next_priority_goal, update_goal_status
         goal = get_next_priority_goal()
-        if goal and goal.get("source") in ("conatus", "chronos"):
+        if goal and goal.get("source") in ("conatus", "chronos", "evolution"):
             if goal.get("type") in ("refresh", "research"):
                 try:
                     log.info(f"[AUTO] Executing: {goal['description'][:60]}")

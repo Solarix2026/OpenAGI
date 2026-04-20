@@ -9,6 +9,7 @@ Tools register themselves. Kernel discovers them via list_tools().
 _classify() receives the live tool list — no hardcoded tool names.
 """
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Any
 import numpy as np
@@ -17,17 +18,31 @@ log = logging.getLogger("ToolRegistry")
 
 # Global encoder cache — load ONCE, reuse forever
 _ENCODER = None
+_ENCODER_LOAD_ATTEMPTED = False
 
 def _get_encoder():
-    """Get cached SentenceTransformer encoder (loads only once)."""
-    global _ENCODER
-    if _ENCODER is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _ENCODER = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-            log.info("Tool encoder loaded (cached)")
-        except Exception as e:
-            log.warning(f"Could not load encoder: {e}")
+    """Get cached SentenceTransformer encoder (loads only once, deferred)."""
+    global _ENCODER, _ENCODER_LOAD_ATTEMPTED
+    if _ENCODER_LOAD_ATTEMPTED:
+        return _ENCODER
+    _ENCODER_LOAD_ATTEMPTED = True
+
+    # Skip on Python 3.14+ due to transformers/importlib.metadata incompatibility
+    import sys
+    if sys.version_info >= (3, 14) and not os.environ.get("FORCE_ENCODER"):
+        log.warning("Python 3.14+ detected - semantic search disabled (set FORCE_ENCODER=1 to override)")
+        return None
+
+    if os.environ.get("OPENAGI_NO_ENCODER"):
+        return None
+
+    try:
+        from sentence_transformers import SentenceTransformer
+        _ENCODER = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+        log.info("Tool encoder loaded (cached)")
+    except Exception as e:
+        log.warning(f"Could not load encoder: {e}")
+        _ENCODER = None
     return _ENCODER
 
 
@@ -61,13 +76,13 @@ class ToolRegistry:
         )
         self._tools[name] = spec
 
-        # Embed description for semantic search (uses cached encoder)
-        enc = _get_encoder()
-        if enc:
-            try:
+        # Embed description for semantic search (uses cached encoder, deferred)
+        try:
+            enc = _get_encoder()
+            if enc:
                 self._embeddings[name] = enc.encode([description])[0]
-            except Exception:
-                pass
+        except Exception:
+            pass  # Continue without embeddings if encoder fails
         log.debug(f"Registered tool: {name}")
 
     def execute(self, name: str, params: dict) -> dict:
