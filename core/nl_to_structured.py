@@ -1,4 +1,4 @@
-# Copyright (c) 2026 ApeironAI
+# Copyright (c) 2026 ApeironAILab
 # OpenAGI — An Apeiron Product
 # MIT License
 

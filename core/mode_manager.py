@@ -1,6 +1,6 @@
-# Copyright (c) 2026 ApeironAI
+# Copyright (c) 2026 ApeironAILab
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/Solarix2026/OpenAGI
+# MIT License — https://github.com/ApeironAILab/OpenAGI
 
 """
 mode_manager.py — Intelligent mode switching

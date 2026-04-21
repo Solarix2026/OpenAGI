@@ -1,6 +1,6 @@
-# Copyright (c) 2026 ApeironAI
+# Copyright (c) 2026 ApeironAILab
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/Solarix2026/OpenAGI
+# MIT License — https://github.com/ApeironAILab/OpenAGI
 
 """
 innovation_engine.py — L5 Creative Problem Solving

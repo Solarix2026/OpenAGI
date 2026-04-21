@@ -1,6 +1,6 @@
-# Copyright (c) 2026 ApeironAI
+# Copyright (c) 2026 ApeironAILab
 # OpenAGI — Autonomous Intelligence System
-# MIT License — https://github.com/Solarix2026/OpenAGI
+# MIT License — https://github.com/ApeironAILab/OpenAGI
 
 """
 evolution_engine.py — 4-layer autonomous self-improvement

@@ -1,17 +1,27 @@
-# OpenAGI v5.6 — Autonomous Intelligence System (L4)
+# OpenAGI v5.7 — Autonomous Intelligence System (L4)
 
 > An L4 autonomous AI agent with memory, computer control, self-evolution, proactive intelligence, and multi-agent hiring.
 > Built on NVIDIA NIM + Groq. Local-first. Private. Open source.
 > 
-> **Company**: ApeironAI/Apeiron | **Founder**: github.com/ApeironAI-Team
+> **Company**: ApeironAI/Apeiron | **Founder**: github.com/ApeironAILab
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ApeironAI-Team/OpenAGI/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ApeironAILab/OpenAGI/blob/main/LICENSE)
 [![Python 3.11-3.14](https://img.shields.io/badge/python-3.11--3.14-blue.svg)](https://www.python.org/downloads/)
 [![React 18](https://img.shields.io/badge/react-18-61DAFB.svg)](https://react.dev/)
 
 ---
 
-## What's New in v5.6
+## What's New in v5.7
+
+| Feature | Description |
+|---------|-------------|
+| **First Principles Reasoning** | Epistemic standards — corrects user errors, reasons from base facts, rejects sycophancy. |
+| **Thinking Mode (Grok-style)** | Real-time reasoning panel showing intent classification, tool execution, and thought steps. |
+| **NL → Structured Converter** | Natural language automatically converted to structured queries for better tool accuracy. |
+| **MCP Server** | Expose OpenAGI tools via Model Context Protocol — use with Claude Code, Cursor, Zed. |
+| **Voice Briefing Mode** | Continuous ambient listening with Jarvis-style responses — "Give me a sec..." |
+
+### v5.6 Features (Previously)
 
 | Feature | Description |
 |---------|-------------|
@@ -22,7 +32,6 @@
 | **Inline Translate** | Select text in WebUI, auto-translate EN/ZH/BM with TTS support. |
 | **CEO Role** | Added CEO agent to AgentOrg — strategic planning, business decisions. |
 | **Perplexity News** | AI-powered news search with citations. Falls back to RSS if no API key. |
-| **License** | Copyright updated to ApeironAI. |
 
 ### v5.5 Features (Previously)
 
@@ -123,7 +132,7 @@
 
 ```bash
 # 1. Clone
-git clone https://github.com/ApeironAI-Team/OpenAGI.git
+git clone https://github.com/ApeironAILab/OpenAGI.git
 cd OpenAGI
 
 # 2. Install (Windows - auto setup)
@@ -291,7 +300,7 @@ OpenAGI/
 5. **Safety**: L4 agents should be auditable
 
 **License**: MIT (already set)
-**Repo**: github.com/ApeironAI-Team/OpenAGI
+**Repo**: github.com/ApeironAILab/OpenAGI
 
 ---
 

@@ -6,7 +6,7 @@ OpenClaw: Electron + electron-updater → checks GitHub releases API → downloa
 Goose: Rust + self_update crate → same pattern
 
 Our Python version:
-1. Check https://api.github.com/repos/Solarix2026/OpenAGI/releases/latest
+1. Check https://api.github.com/repos/ApeironAILab/OpenAGI/releases/latest
 2. Compare tag_name with current VERSION
 3. If newer: download the zip → extract → restart
 
@@ -24,7 +24,7 @@ import subprocess
 from pathlib import Path
 
 VERSION = "5.3.0"
-GITHUB_REPO = "Solarix2026/OpenAGI"
+GITHUB_REPO = "ApeironAILab/OpenAGI"
 RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 

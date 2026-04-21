@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""Fix copyright from Solarix2026 to ApeironAI."""
+"""Fix copyright from ApeironAILab to ApeironAI."""
 from pathlib import Path
 
-OLD = "# Copyright (c) 2026 ApeironAI"
-NEW = "# Copyright (c) 2026 ApeironAI"
+OLD = "# Copyright (c) 2026 ApeironAILab
+NEW = "# Copyright (c) 2026 ApeironAILab
 
 changed = 0
 
