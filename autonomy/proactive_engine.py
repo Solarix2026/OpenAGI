@@ -140,6 +140,31 @@ Return one natural sentence. No emoji. No prefix. Just tell it."""
         now = time.time()
         idle_mins = self._get_idle_minutes()
 
+        # ── Real-time news (Perplexity or RSS) ──────────────────────
+        if (now - getattr(self, '_last_news_check', 0)) > 1800:  # Every 30min
+            try:
+                from core.perplexity_client import get_breaking_news
+                # Check user's topic interests from habit profile
+                topics = "technology ai finance"
+                if self.k.habits:
+                    profile = self.k.habits.get_profile()
+                    top_topics = profile.get("top_topics", [])[:3]
+                    if top_topics:
+                        topics = " ".join(top_topics)
+                result = get_breaking_news(topics)
+                if result.get("success") and result.get("answer"):
+                    news_text = result["answer"][:300]
+                    # Check if genuinely new / relevant
+                    if self.k.beep:
+                        score = self.k.beep.relevance_score({"content": news_text})
+                        if score > 0.4 and idle_mins > 5:
+                            # Only push to WebUI — NO Telegram (web mode guard)
+                            if hasattr(self.k, '_webui_push') and self.k._webui_push:
+                                self.k._webui_push(f"📰 {news_text}")
+                self._last_news_check = now
+            except Exception as e:
+                log.debug(f"News check error: {e}")
+
         # ── World events ──────────────────────────────────────────
         if self.k.worldmonitor and self.k.beep:
             try:

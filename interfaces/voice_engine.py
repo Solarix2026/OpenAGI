@@ -186,6 +186,33 @@ class VoiceEngine:
         self._thread = threading.Thread(target=_loop, daemon=True, name="VoiceLoop")
         self._thread.start()
 
+    def briefing_mode(self, kernel_ref) -> None:
+        """Continuous ambient briefing mode — like Jarvis finance update."""
+        import time
+        log.info("Briefing mode active — speak naturally")
+        self.speak("Good evening. I'm listening. What would you like to know?")
+        while self.running:
+            audio = self.listen_utterance(max_seconds=8)
+            if not audio:
+                continue
+            transcript = self.transcribe(audio)
+            if not transcript or len(transcript.strip()) < 3:
+                continue
+            log.info(f"[VOICE] Heard: {transcript}")
+            # Short acknowledgment first (feels responsive)
+            ack_words = ["finance", "stock", "market", "news"]
+            if any(w in transcript.lower() for w in ack_words):
+                self.speak("Give me a sec.")
+            # Process
+            response = kernel_ref.process(transcript)
+            # Speak response with natural pauses
+            sentences = re.split(r'(?<=[.!?])\s+', response)
+            for sentence in sentences[:5]:  # Max 5 sentences for voice
+                clean = re.sub(r'\*+|_+|`+|#+ ?', '', sentence).strip()
+                if clean and len(clean) > 10:
+                    self.speak(clean)
+                    time.sleep(0.1)  # Micro-pause between sentences
+
     def stop(self):
-        """Stop continuous mode."""
+        """Stop continuous mode.""
         self.running = False

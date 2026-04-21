@@ -161,6 +161,15 @@ kbd{display:inline-flex;align-items:center;padding:1px 5px;border-radius:4px;bac
 .translate-btn {font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);cursor:pointer;}
 .translate-btn:hover {background:var(--surface-3);color:var(--text);}
 .translate-btn.primary {background:var(--blue-dim);border-color:var(--blue-border);color:#60a5fa;}
+
+/* Thinking panel */
+#thinking-panel {position:fixed;top:56px;right:0;width:260px;max-height:calc(100vh - 56px);background:rgba(5,8,20,0.95);border-left:1px solid var(--border);backdrop-filter:blur(16px);transform:translateX(100%);transition:transform 0.25s ease;z-index:100;overflow-y:auto;display:flex;flex-direction:column;}
+#thinking-panel.open {transform:translateX(0);}
+.thinking-step {padding:6px 12px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-muted);border-bottom:1px solid rgba(148,163,184,0.04);animation:fadeIn .15s ease-out;}
+.thinking-step.active {color:#60a5fa;}
+.thinking-step::before {content:'▸ ';color:var(--blue);}
+#thinking-toggle {position:fixed;top:58px;right:8px;z-index:101;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--text-muted);cursor:pointer;display:none;}
+#thinking-toggle.active {display:block;color:#60a5fa;border-color:var(--blue-border);}
 </style>
 </head>
 <body>
@@ -169,7 +178,7 @@ kbd{display:inline-flex;align-items:center;padding:1px 5px;border-radius:4px;bac
 <header class="header">
 <div style="display:flex;align-items:center;gap:10px">
 <span style="font-size:18px;font-weight:800;letter-spacing:-.02em;color:#f1f5f9">OpenAGI</span>
-<span style="font-size:11px;background:rgba(30,41,59,.8);border:1px solid var(--border);padding:2px 8px;border-radius:99px;color:var(--text-muted);font-family:'JetBrains Mono',monospace">v5.5</span>
+<span style="font-size:11px;background:rgba(30,41,59,.8);border:1px solid var(--border);padding:2px 8px;border-radius:99px;color:var(--text-muted);font-family:'JetBrains Mono',monospace">v5.7</span>
 <span id="mode-pill" class="mode-pill mode-auto">Auto</span>
 </div>
 <div style="display:flex;align-items:center;gap:14px">
@@ -351,7 +360,7 @@ const CMDS=[
 let wsReconnectAttempt=0;const MAX_RECONNECT_ATTEMPTS=10;const RECONNECT_DELAY=1000;
 function connect(){console.log('[WS] Connecting to',location.host);try{ws=new WebSocket('ws://'+location.host+'/ws');ws.onopen=()=>{console.log('[WS] Connected');wsReconnectAttempt=0;setStatus('online');
 if(!animationPlayed){loadHistory();animationPlayed=true;}
-loadAgentTeam();refreshSidebar();loadMemory();loadCapabilities();};ws.onclose=(e)=>{console.log('[WS] Closed',e.code,e.reason);setStatus('offline');if(e.code!==1000)scheduleReconnect();};ws.onerror=(e)=>{console.error('[WS] Error',e);setStatus('offline');scheduleReconnect();};ws.onmessage=(e)=>{console.log('[WS] Message',e.data.slice(0,100));const d=JSON.parse(e.data);if(d.type==='thinking')showThinking();if(d.type==='response')showResponse(d.text);if(d.type==='proactive')addMsg(d.text,'agent',true);if(d.type==='log')addLog(d);if(d.type==='mode')updateModePill(d.mode);};}catch(e){console.error('[WS] Failed to create',e);setStatus('offline');scheduleReconnect();}}
+loadAgentTeam();refreshSidebar();loadMemory();loadCapabilities();};ws.onclose=(e)=>{console.log('[WS] Closed',e.code,e.reason);setStatus('offline');if(e.code!==1000)scheduleReconnect();};ws.onerror=(e)=>{console.error('[WS] Error',e);setStatus('offline');scheduleReconnect();};ws.onmessage=(e)=>{console.log('[WS] Message',e.data.slice(0,100));const d=JSON.parse(e.data);if(d.type==='thinking')showThinking();if(d.type==='response')showResponse(d.text);if(d.type==='proactive'){if(d.text&&d.text.startsWith('__THINKING__:')){addThinkingStep(d.text.slice(13));}else{addMsg(d.text,'agent',true);}}if(d.type==='log')addLog(d);if(d.type==='mode')updateModePill(d.mode);};}catch(e){console.error('[WS] Failed to create',e);setStatus('offline');scheduleReconnect();}}
 function scheduleReconnect(){if(wsReconnectAttempt<MAX_RECONNECT_ATTEMPTS){wsReconnectAttempt++;const delay=RECONNECT_DELAY*Math.pow(2,Math.min(wsReconnectAttempt-1,3));console.log(`[WS] Reconnecting in ${delay}ms (attempt ${wsReconnectAttempt}/${MAX_RECONNECT_ATTEMPTS})`);setTimeout(connect,delay);}else{console.error('[WS] Max reconnection attempts reached');setStatus('offline');}}
 function setStatus(state){const dot=document.getElementById('status-dot'),txt=document.getElementById('status-text');dot.className='status-dot '+(state==='online'?'online':state==='thinking'?'thinking-st':'offline');txt.textContent=state==='online'?'Online':state==='thinking'?'Thinking':state==='offline'?'Disconnected':'Connecting';}
 function send(){const inp=document.getElementById('chat-input'),text=inp.value.trim();if(!text||!ws||ws.readyState!==WebSocket.OPEN)return;addMsg(text,'user');ws.send(JSON.stringify({type:'message',text}));inp.value='';inp.style.height='auto';detectMode(text);}
@@ -397,6 +406,10 @@ async function saveSetting(key,value){await fetch('/api/settings',{method:'POST'
 function openSettings(){loadSettingsData();document.getElementById('settings-modal').classList.add('open');}
 function toggleVoice(){const btn=document.getElementById('mic-btn');if(recognition){recognition.stop();recognition=null;btn.classList.remove('active');return;}const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){alert('Voice not supported. Use Chrome or Edge.');return;}recognition=new SR();recognition.lang='zh-CN';recognition.continuous=false;recognition.onresult=(e)=>{qs(e.results[0][0].transcript);btn.classList.remove('active');recognition=null;};recognition.onend=()=>{btn.classList.remove('active');recognition=null;};recognition.start();btn.classList.add('active');}
 function addLog(l){logs.push(l);if(logs.length>300)logs.shift();if(currentTab!=='logs')document.getElementById('log-dot').style.display='';else renderSidebar();}
+let _thinkingSteps=[],_thinkingOpen=false,_thinkingCount=0;
+function toggleThinking(){_thinkingOpen=!_thinkingOpen;document.getElementById('thinking-panel').classList.toggle('open',_thinkingOpen);}
+function addThinkingStep(text){_thinkingCount++;_thinkingSteps.push(text);const toggle=document.getElementById('thinking-toggle');toggle.classList.add('active');document.getElementById('thinking-count').textContent=_thinkingCount;const container=document.getElementById('thinking-steps');const div=document.createElement('div');div.className='thinking-step active';div.textContent=text;container.appendChild(div);setTimeout(()=>div.classList.remove('active'),2000);while(container.children.length>20)container.removeChild(container.firstChild);}
+function clearThinking(){_thinkingSteps=[];_thinkingCount=0;document.getElementById('thinking-steps').innerHTML='';document.getElementById('thinking-toggle').classList.remove('active');}
 async function fetchJson(url){try{return await fetch(url).then(r=>r.json());}catch{return{};}}
 document.addEventListener('keydown',(e)=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openCmd();}if(e.key==='Escape'){closeCmd();closeSettings();}});
 let _selectedText='';let _translateTarget='en';
@@ -445,5 +458,17 @@ const origShowResponse=showResponse;showResponse=function(text){origShowResponse
 connect();setInterval(loadMemory,30000);
 </script>
 <div id="pet" style="position:fixed;z-index:500;width:52px;height:52px;cursor:pointer;user-select:none;display:none;transition:left .4s cubic-bezier(.34,1.56,.64,1),top .4s cubic-bezier(.34,1.56,.64,1)" onclick="petClick()" title="Click me!"><canvas id="pet-canvas" width="52" height="52"></canvas></div>
+</div></div></div></div>
+<button id="thinking-toggle" onclick="toggleThinking()">
+<i class="fa fa-brain"></i>
+<span id="thinking-count">0</span> thoughts
+</button>
+<div id="thinking-panel">
+<div style="padding:10px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;">
+<span><i class="fa fa-brain" style="color:#8b5cf6;margin-right:6px;"></i>Thinking</span>
+<button onclick="toggleThinking()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;">×</button>
+</div>
+<div id="thinking-steps" style="padding:4px 0;"></div>
+</div>
 </body>
 </html>

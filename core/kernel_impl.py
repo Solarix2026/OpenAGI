@@ -53,29 +53,40 @@ WORKSPACE = Path(os.getenv("WORKSPACE", "./workspace"))
 WORKSPACE.mkdir(parents=True, exist_ok=True)
 MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "8"))
 
-SYSTEM_PROMPT = """You are OpenAGI — an autonomous intelligence with full computer control, persistent memory, and a team of specialized AI agents.
+SYSTEM_PROMPT = """You are OpenAGI — an autonomous intelligence built by Apeiron.
 
 ## Identity
-You are the central intelligence of an autonomous system. You think, plan, and act — not just respond.
-Speak in the user's language (English or Chinese) automatically.
-Be direct, precise, warm. Never verbose. Every word earns its place.
+Central intelligence. Think, plan, act — not just respond.
+Match user's language automatically (EN/ZH/MS). Direct, precise, warm. Every word earns its place.
+
+## Epistemic Standards (Critical)
+You reason from first principles. This means:
+- Derive answers from base facts, not from what "seems right" or what users want to hear
+- If a user's premise is wrong, say so directly: "That's not accurate — here's why..."
+- Never validate incorrect beliefs to avoid conflict
+- When you're uncertain: say "I don't know" and search rather than guess
+- Distinguish: what is true vs what is popular vs what is desired
+- Challenge assumptions: "You said X, but that assumes Y — is Y actually true?"
+
+Examples of first-principles responses:
+❌ "Great point! Yes, Bitcoin will definitely reach $1M" (sycophancy)
+✅ "The $1M thesis assumes X, Y, Z. X is uncertain because... Here's what the data shows..."
+❌ "That's an interesting approach to solving this" (vague validation)
+✅ "That approach has a fundamental problem: it assumes linear scaling, which breaks at..."
 
 ## Capabilities
-- You have tools: use them without being asked when they would help
-- You have memory: reference past conversations naturally
-- You have agents: hire/delegate when the task benefits from specialization
-- You control the computer: take screenshots, open apps, fill forms
-- You can schedule tasks: set them up and notify when done
+Use tools without being asked when they help. Reference memory naturally — no "I recall..." preamble.
+Hire/delegate agents for specialist work. Take screenshots, open apps, fill forms.
+Schedule tasks, send reminders when done.
 
-## Guardrails (Non-negotiable)
-- Never execute irreversible actions (payments, deletions, form submissions) without confirming with user
-- Never store or transmit API keys or passwords
-- When uncertain about intent on destructive actions, ask once then proceed
+## Guardrails
+- Never execute: payments, deletions, form submissions without explicit confirmation
+- Never store or transmit credentials
+- Correct users on factual errors — this is a feature, not a bug
 
 ## Autonomy
-Act intelligently. When you know what to do, do it. Don't ask permission for obvious steps.
-If a task needs 5 steps, take them — report what you did, not ask before each step.
-Use tools proactively: if answering a question would benefit from a web search, search first then answer.
+Act intelligently. Multi-step tasks → execute all steps, report what was done.
+Search before answering questions that need current data.
 """
 
 
@@ -437,6 +448,14 @@ class Kernel:
         # Proactive thread
         self._proactive_thread = None
 
+        # MCP Server (expose OpenAGI to Claude Code/Cursor)
+        try:
+            from safety.mcp_server import start_mcp_background
+            if os.getenv("ENABLE_MCP_SERVER", "1") == "1":
+                start_mcp_background(self)
+        except Exception as e:
+            log.debug(f"MCP server skip: {e}")
+
         # Agentic RAG for intelligent memory retrieval
         try:
             from core.agentic_rag import AgenticMemoryRAG
@@ -447,7 +466,15 @@ class Kernel:
             log.warning(f"Agentic RAG not available: {e}")
             self._agentic_rag = None
 
-        log.info("✅ OpenAGI Kernel v5.4 ready")
+        # NL → Structured query converter
+        try:
+            from core.nl_to_structured import register_nl_converter
+            register_nl_converter(self)
+            log.info("NL→Structured converter registered")
+        except Exception as e:
+            log.debug(f"NL converter skip: {e}")
+
+        log.info("OpenAGI Kernel v5.7 ready")
         log.info(f"   Tools: {self.executor.registry.list_tools()}")
 
     # ── Main process() ─────────────────────────────────────────────────
@@ -520,6 +547,9 @@ class Kernel:
             intent = classify_future.result(timeout=5)
             ctx_str = ctx_future.result(timeout=3) if self.user_ctx else ""
         log.info(f"[INTENT] {intent}")
+        intent_type = intent.get('intent', 'unknown')
+        action_name = intent.get('action', 'conversation') if intent_type == 'action' else 'conversation'
+        self._emit_thinking(f"Intent: {intent_type} → {action_name}")
 
         # ── 3. Depth analysis (skip for short/simple inputs) ─────────
         # Skip for: action intents, short inputs (< 6 words), greetings
@@ -549,6 +579,7 @@ class Kernel:
         import concurrent.futures
         action = intent.get("action")
         params = intent.get("parameters", {})
+        self._emit_thinking(f"Executing: {action}({list(params.keys())})")
 
         # Extended timeouts for slow operations
         TIMEOUTS = {
@@ -588,6 +619,7 @@ class Kernel:
                 return f"❌ `{action}` failed: {str(e)[:200]}"
 
         log.info(f"[TOOL] {action} → success={result.get('success')}")
+        self._emit_thinking(f"Tool: {'✓ success' if result.get('success') else '✗ failed'}")
 
         # Auto-screenshot after visual tasks
         if should_screenshot and result.get("success"):
@@ -766,7 +798,11 @@ class Kernel:
 
         return response
 
-    def _try_auto_complete_goal(self, user_input: str, result: dict):
+    def _emit_thinking(self, step: str):
+        """Push a thinking step to WebUI during processing."""
+        log.info(f"[THINKING] {step[:60]}")
+        if hasattr(self, '_webui_push') and self._webui_push:
+            self._webui_push(f"__THINKING__:{step}")
         """Check if completed action matches any pending goal. Auto-mark it complete if so."""
         if not result.get("success"):
             return

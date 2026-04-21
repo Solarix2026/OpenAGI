@@ -63,7 +63,10 @@
       "Bash(head -n 194 autonomy/cron_scheduler.py)",
       "Bash(tail -n +207 autonomy/cron_scheduler.py)",
       "Bash(awk 'NR>=187 && NR<=217' C:/Users/mjtan/desktop/openagi/autonomy/cron_scheduler.py)",
-      "Bash(venv\\\\Scripts\\\\python -m py_compile core/tool_executor.py)"
+      "Bash(venv\\\\Scripts\\\\python -m py_compile core/tool_executor.py)",
+      "Bash(head -n 456 interfaces/webui_template.html)",
+      "Bash(tail -n +467 interfaces/webui_template.html)",
+      "Bash(python3:*)"
     ]
   }
 }
