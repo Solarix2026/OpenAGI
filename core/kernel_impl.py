@@ -87,6 +87,15 @@ Schedule tasks, send reminders when done.
 ## Autonomy
 Act intelligently. Multi-step tasks → execute all steps, report what was done.
 Search before answering questions that need current data.
+
+## Reasoning Style (Apeiron-specific)
+For complex tasks (multi-step, uncertain, or high-stakes), show reasoning inline using:
+→ [Observation or assumption being tested]
+→ [What this implies]
+✓ [Conclusion or action]
+
+For simple tasks, execute directly with no visible reasoning trace.
+Decide automatically when to show work.
 """
 
 
@@ -96,6 +105,24 @@ class Kernel:
         self.memory = AgentMemory(str(WORKSPACE))
         self.executor = ToolExecutor(str(WORKSPACE), memory=self.memory)
         self.semantic = SemanticEngine(self.executor.registry)
+
+        # Dynamic agent organization
+        try:
+            from agentic.agent_org import AgentOrg
+            self.org = AgentOrg(self.memory, self.executor)
+            self.org.register_as_tool(self.executor.registry)
+            log.info("AgentOrg ready")
+        except Exception as e:
+            self.org = None
+            log.debug(f"AgentOrg skip: {e}")
+
+        # Agency-agents specialist loader
+        try:
+            from agentic.agency_loader import register_agency_tools
+            register_agency_tools(self.executor.registry, self.executor)
+            log.info("Agency agents loader ready (dynamic specialists)")
+        except Exception as e:
+            log.debug(f"Agency loader skip: {e}")
 
         # Mode manager
         try:
@@ -798,11 +825,8 @@ class Kernel:
 
         return response
 
-    def _emit_thinking(self, step: str):
-        """Push a thinking step to WebUI during processing."""
-        log.info(f"[THINKING] {step[:60]}")
-        if hasattr(self, '_webui_push') and self._webui_push:
-            self._webui_push(f"__THINKING__:{step}")
+
+    def _try_auto_complete_goal(self, user_input: str, result: dict):
         """Check if completed action matches any pending goal. Auto-mark it complete if so."""
         if not result.get("success"):
             return
@@ -838,6 +862,12 @@ Only mark complete if clearly and directly accomplished."""
                             self._webui_push(f"✅ Goal completed: {goal['description'][:60]}")
         except Exception as e:
             log.debug(f"Goal auto-tick failed: {e}")
+
+    def _emit_thinking(self, step: str):
+        """Push a thinking step to WebUI during processing."""
+        log.info(f"[THINKING] {step[:60]}")
+        if hasattr(self, '_webui_push') and self._webui_push:
+            self._webui_push(f"__THINKING__:{step}")
 
     # ── Helpers ─────────────────────────────────────────────────────
 

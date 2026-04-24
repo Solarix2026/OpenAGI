@@ -1,5 +1,5 @@
 // Goals Page with real API data + real-time updates
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getWebSocketManager } from '../services/websocket';
 import { apiClient } from '../services/api';
@@ -46,11 +46,13 @@ export function GoalsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
+  const loadingStartTime = useRef<number>(0);
 
   // Load goals from API
-  const loadGoals = useCallback(async () => {
+  const loadGoals = useCallback(async (showSkeleton = true) => {
     try {
-      setLoading(true);
+      loadingStartTime.current = Date.now();
+      if (showSkeleton) setLoading(true);
       const data = await apiClient.getGoals();
       // Transform server data to Goal format
       const transformedGoals: Goal[] = (data.goals || []).map((g: any, index: number) => ({
@@ -74,13 +76,20 @@ export function GoalsPage() {
       addToast('Failed to load goals', 'error');
       setGoals([]);
     } finally {
-      setLoading(false);
+      // Minimum loading time to prevent flash
+      const elapsed = Date.now() - (loadingStartTime.current || 0);
+      const minLoadingTime = 300;
+      if (elapsed < minLoadingTime) {
+        setTimeout(() => setLoading(false), minLoadingTime - elapsed);
+      } else {
+        setLoading(false);
+      }
     }
-  }, [addToast]);
+  }, []); // removed addToast
 
   // Load goals on mount and set up WebSocket for real-time updates
   useEffect(() => {
-    loadGoals();
+    loadGoals(true);
 
     // WebSocket for real-time goal updates
     const wsManager = getWebSocketManager();
@@ -131,8 +140,8 @@ export function GoalsPage() {
           return prev;
         });
       } else if (msg.type === 'goal_created' && msg.goal) {
-        // New goal added - refresh list
-        loadGoals();
+        // New goal added - refresh list without flashing
+        loadGoals(false);
       }
     };
 
@@ -140,7 +149,7 @@ export function GoalsPage() {
 
     // Also poll every 30s as fallback
     const interval = setInterval(() => {
-      loadGoals();
+      loadGoals(false);
     }, 30000);
 
     return () => {

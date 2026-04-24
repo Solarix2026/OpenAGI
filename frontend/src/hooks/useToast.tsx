@@ -1,4 +1,5 @@
 // Toast notification hook with react-hot-toast
+import { useCallback } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
 
 interface ToastOptions {
@@ -7,7 +8,7 @@ interface ToastOptions {
 }
 
 export function useToast() {
-  const addToast = (
+  const addToast = useCallback((
     message: string,
     type: 'success' | 'error' | 'info' | 'warning' = 'info',
     options?: ToastOptions
@@ -49,20 +50,22 @@ export function useToast() {
       default:
         toast(message, config);
     }
-  };
+  }, []);
 
-  const dismissToast = (id?: string) => {
+  const dismissToast = useCallback((id?: string) => {
     if (id) {
       toast.dismiss(id);
     } else {
       toast.dismiss();
     }
-  };
+  }, []);
+
+  const ToasterComponent = useCallback(() => <Toaster />, []);
 
   return {
     addToast,
     dismissToast,
-    Toaster: () => <Toaster />,
+    Toaster: ToasterComponent,
   };
 }
 

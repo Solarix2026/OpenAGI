@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "openagi": {
+      "url": "http://127.0.0.1:8766",
+      "description": "OpenAGI tools \u2014 computer control, memory, planning, agents"
+    }
+  }
+}

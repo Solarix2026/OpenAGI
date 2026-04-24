@@ -44,22 +44,22 @@ class APIClient {
   }
 
   // Skills & Tools
-  getSkills(): Promise<Skill[]> {
-    return this.fetch<Skill[]>('/skills');
+  getSkills(): Promise<{ skills: Skill[] }> {
+    return this.fetch<{ skills: Skill[] }>('/skills').catch(() => ({ skills: [] }));
   }
 
-  getTools(): Promise<Tool[]> {
-    return this.fetch<Tool[]>('/tools').catch(() => []);
+  getTools(): Promise<{ tool_names: string[] }> {
+    return this.fetch<{ tool_names: string[] }>('/tools').catch(() => ({ tool_names: [] }));
   }
 
   // Get tools from status endpoint (returns { tool_names: [...] })
   getToolNames(): Promise<string[]> {
-    return this.fetch('/status').then(data => data.tool_names || []).catch(() => []);
+    return this.fetch<SystemStatus>('/status').then((data: any) => data.tool_names || []).catch(() => []);
   }
 
   // Goals
-  getGoals(): Promise<Goal[]> {
-    return this.fetch('/goals');
+  getGoals(): Promise<{ goals: Goal[] }> {
+    return this.fetch<{ goals: Goal[] }>('/goals').catch(() => ({ goals: [] }));
   }
 
   addGoal(description: string): Promise<Goal> {
@@ -114,7 +114,6 @@ class APIClient {
   readFile(path: string): Promise<string> {
     return this.fetch(`/file?path=${encodeURIComponent(path)}`).then((res: any) => res.content || '');
   }
-}
 
   // Logs
   getLogs(level?: string, module?: string, limit?: number, offset?: number): Promise<{ logs: any[]; total: number; modules: string[] }> {

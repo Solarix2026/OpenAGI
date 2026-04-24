@@ -103,4 +103,5 @@ export const Icons = {
   timer: 'fa-hourglass-half',
   expand: 'fa-expand',
   compress: 'fa-compress',
+  circle: 'fa-circle',
 } as const;

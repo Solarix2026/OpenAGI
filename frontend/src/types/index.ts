@@ -27,7 +27,7 @@ export interface Skill {
 export interface Goal {
   id: string;
   description: string;
-  status: 'pending' | 'active' | 'completed';
+  status: 'pending' | 'active' | 'completed' | 'abandoned';
   source: 'user' | 'system';
   createdAt: number;
   progress?: number;
@@ -68,6 +68,7 @@ export interface SystemStatus {
   uptime: string;
   avgResponseTime: number;
   requestsPerMin: number;
+  tool_names?: string[];
   apiKeysSet: {
     groq: boolean;
     nvidia: boolean;
@@ -95,6 +96,7 @@ export interface Settings {
     nvidia?: string;
     telegram?: string;
   };
+  telegram_set?: boolean;
 
   // User Context
   city?: string;

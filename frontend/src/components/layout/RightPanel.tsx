@@ -130,7 +130,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({ className }) => {
           <span>Recent Memory</span>
           <button
             className={styles.refreshBtn}
-            onClick={loadData}
+            onClick={() => loadData()}
             title="Refresh"
           >
             <Icon icon={Icons.refresh} size="sm" />

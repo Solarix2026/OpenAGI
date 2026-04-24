@@ -18,6 +18,7 @@ interface MessageProps {
   onRegenerate?: () => void;
   onCopy?: () => void;
   onDelete?: () => void;
+  onReply?: () => void;
 }
 
 // Typing animation for message content
@@ -31,8 +32,13 @@ function TypingText({
   onComplete?: () => void;
 }) {
   const [displayText, setDisplayText] = useState('');
+  const typingStartedRef = useRef(false);
 
   useEffect(() => {
+    // Only start typing once, never restart
+    if (typingStartedRef.current) return;
+
+    typingStartedRef.current = true;
     let currentIndex = 0;
     const timer = setInterval(() => {
       if (currentIndex < text.length) {
@@ -45,7 +51,7 @@ function TypingText({
     }, speed);
 
     return () => clearInterval(timer);
-  }, [text, speed, onComplete]);
+  }, []); // Empty dependency array - run only once
 
   return <span>{displayText}</span>;
 }
@@ -83,19 +89,46 @@ function MessageActions({
   onCopy,
   onRegenerate,
   onDelete,
+  onReply,
+  content,
   isVisible,
 }: {
   onCopy?: () => void;
   onRegenerate?: () => void;
   onDelete?: () => void;
+  onReply?: () => void;
+  content: string;
   isVisible: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    onCopy?.();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      onCopy?.();
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const handleReply = () => {
+    onReply?.();
+  };
+
+  const handleRegenerate = () => {
+    if (onRegenerate) {
+      onRegenerate();
+    }
+  };
+
+  const handleDelete = () => {
+    if (onDelete) {
+      if (confirm('Delete this message?')) {
+        onDelete();
+      }
+    }
   };
 
   return (
@@ -116,20 +149,28 @@ function MessageActions({
             <Icon icon={copied ? Icons.check : Icons.copy} size="sm" />
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
+          <button
+            className={styles.actionBtn}
+            onClick={handleReply}
+            title="Reply"
+          >
+            <Icon icon={Icons.reply} size="sm" />
+            <span>Reply</span>
+          </button>
           {onRegenerate && (
             <button
               className={styles.actionBtn}
-              onClick={onRegenerate}
+              onClick={handleRegenerate}
               title="Regenerate"
             >
-              <Icon icon={Icons.refresh} size="sm" />
+              <Icon icon={Icons.regenerate} size="sm" />
               <span>Regenerate</span>
             </button>
           )}
           {onDelete && (
             <button
               className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-              onClick={onDelete}
+              onClick={handleDelete}
               title="Delete"
             >
               <Icon icon={Icons.trash} size="sm" />
@@ -152,17 +193,21 @@ export function AnimatedMessage({
   onRegenerate,
   onCopy,
   onDelete,
+  onReply,
 }: MessageProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [isTyping, setIsTyping] = useState(type === 'agent' && !isStreaming);
   const messageRef = useRef<HTMLDivElement>(null);
+  const hasStartedTyping = useRef(false);
 
   useEffect(() => {
-    if (type === 'agent') {
+    // Only trigger typing animation once on mount
+    if (type === 'agent' && !hasStartedTyping.current) {
+      hasStartedTyping.current = true;
       setIsTyping(true);
     }
-  }, [type, content]);
+  }, [type]);
 
   // Auto-scroll to message on mount
   useEffect(() => {
@@ -171,11 +216,6 @@ export function AnimatedMessage({
 
   const formatTime = (ts: number) => {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content);
-    onCopy?.();
   };
 
   // Markdown components customization
@@ -352,9 +392,11 @@ export function AnimatedMessage({
 
           {/* Message Actions */}
           <MessageActions
-            onCopy={handleCopy}
+            onCopy={onCopy}
             onRegenerate={onRegenerate}
             onDelete={onDelete}
+            onReply={onReply}
+            content={content}
             isVisible={showActions && !isUser}
           />
         </div>

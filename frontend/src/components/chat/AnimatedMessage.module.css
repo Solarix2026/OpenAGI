@@ -321,7 +321,7 @@
 .messageActions {
   position: absolute;
   top: 50%;
-  left: -42px;
+  right: calc(100% + 8px);
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
@@ -331,17 +331,9 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
   z-index: 10;
   align-items: center;
-}
-
-.markdownBody:hover .messageActions,
-.agentBody:hover .messageActions {
-  opacity: 1;
-  visibility: visible;
+  white-space: nowrap;
 }
 
 .actionBtn {
@@ -402,20 +394,20 @@
   color: var(--text-dim);
 }
 
-/* Skeleton */
+/* Skeleton - no animation to prevent flashing */
 .skeletonAvatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
   background: var(--surface-2);
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  /* Static - no animation */
 }
 
 .skeletonText {
   height: 12px;
   background: var(--surface-2);
   border-radius: 4px;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  /* Static - no animation */
 }
 
 .skeletonName {

@@ -69,7 +69,9 @@ async def run_mcp_server(kernel, host="127.0.0.1", port=8766):
     config_path.write_text(json.dumps(mcp_config, indent=2))
     log.info("MCP config written to .mcp.json")
     log.info(f"MCP Server: http://{host}:{port}")
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    await server.serve()
 
 def start_mcp_background(kernel):
     """Start MCP server in background thread."""
@@ -77,7 +79,12 @@ def start_mcp_background(kernel):
     def _run():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(run_mcp_server(kernel))
+        try:
+            loop.run_until_complete(run_mcp_server(kernel))
+        except Exception as e:
+            log.error(f"MCP server error in background thread: {e}")
+        finally:
+            loop.close()
     t = threading.Thread(target=_run, daemon=True, name="MCPServer")
     t.start()
     log.info("MCP Server starting on :8766")

@@ -1,5 +1,5 @@
 // Skills Page with real API data
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '../services/api';
 import { Button, Input, Icon, Icons, Toggle } from '../components/common';
@@ -53,10 +53,13 @@ export function SkillsPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { addToast } = useToast();
+  const loadingStartTime = useRef<number>(0);
 
   // Load skills from API
   const loadSkills = useCallback(async () => {
+    console.log('loadSkills called');
     try {
+      loadingStartTime.current = Date.now();
       setLoading(true);
       const data = await apiClient.getSkills();
       // Transform server data to Skill format
@@ -81,9 +84,16 @@ export function SkillsPage() {
       addToast('Failed to load skills', 'error');
       setSkills([]);
     } finally {
-      setLoading(false);
+      // Minimum loading time to prevent flash
+      const elapsed = Date.now() - (loadingStartTime.current || 0);
+      const minLoadingTime = 300;
+      if (elapsed < minLoadingTime) {
+        setTimeout(() => setLoading(false), minLoadingTime - elapsed);
+      } else {
+        setLoading(false);
+      }
     }
-  }, [addToast]);
+  }, []); // Remove addToast
 
   useEffect(() => {
     loadSkills();

@@ -104,14 +104,14 @@ class ToolExecutor:
             log.debug(f"HTML PPT skip: {e}")
 
         # Perplexity news search
-    try:
-        from core.perplexity_client import register_perplexity_tools
-        register_perplexity_tools(reg)
-        log.info("📰 Perplexity news search registered")
-    except Exception as e:
-        log.debug(f"Perplexity skip: {e}")
+        try:
+            from core.perplexity_client import register_perplexity_tools
+            register_perplexity_tools(reg)
+            log.info("📰 Perplexity news search registered")
+        except Exception as e:
+            log.debug(f"Perplexity skip: {e}")
 
-    # Register memory and goal tools for skills
+        # Register memory and goal tools for skills
         reg.register("list_goals", self._list_goals,
             "List all active goals from the goal queue",
             {})

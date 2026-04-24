@@ -1,5 +1,5 @@
 // Tools Page with real API data
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button, Input, Icon, Icons } from '../components/common';
 import { apiClient } from '../services/api';
@@ -45,10 +45,12 @@ export function ToolsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const { addToast } = useToast();
+  const loadingStartTime = useRef<number>(0);
 
   // Load tools from API
   const loadTools = useCallback(async () => {
     try {
+      loadingStartTime.current = Date.now();
       setLoading(true);
       const data = await apiClient.getStatus();
       // Transform server data to Tool format
@@ -71,9 +73,16 @@ export function ToolsPage() {
       addToast('Failed to load tools', 'error');
       setTools([]);
     } finally {
-      setLoading(false);
+      // Minimum loading time to prevent flash (300ms)
+      const elapsed = Date.now() - (loadingStartTime.current || 0);
+      const minLoadingTime = 300;
+      if (elapsed < minLoadingTime) {
+        setTimeout(() => setLoading(false), minLoadingTime - elapsed);
+      } else {
+        setLoading(false);
+      }
     }
-  }, [addToast]);
+  }, []); // addToast removed to prevent infinite loops
 
   useEffect(() => {
     loadTools();

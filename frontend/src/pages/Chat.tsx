@@ -78,11 +78,13 @@ export function ChatPage() {
   const [isCmdOpen, setIsCmdOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
+  const skeletonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -93,12 +95,10 @@ export function ChatPage() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Initialize session with skeleton loading
+  // Initialize session with skeleton loading - only show skeleton when actually loading
   useEffect(() => {
     if (!hasInitialized.current) {
       hasInitialized.current = true;
-      // Simulate loading for skeleton
-      const skeletonTimer = setTimeout(() => setShowSkeleton(false), 800);
 
       // Create new session if none exists
       if (!currentSessionId) {
@@ -108,9 +108,34 @@ export function ChatPage() {
         });
       }
 
-      return () => clearTimeout(skeletonTimer);
+      // Minimum skeleton display time for smooth UX (300ms)
+      const minSkeletonTime = 300;
+      skeletonTimerRef.current = setTimeout(() => {
+        setShowSkeleton(false);
+        setIsInitializing(false);
+      }, minSkeletonTime);
+
+      return () => {
+        if (skeletonTimerRef.current) {
+          clearTimeout(skeletonTimerRef.current);
+        }
+      };
     }
   }, [addSession, currentSessionId]);
+
+  // Hide skeleton immediately once we have session and messages data
+  useEffect(() => {
+    if (!isInitializing && currentSessionId) {
+      const session = useSessionStore.getState().sessions.find(s => s.id === currentSessionId);
+      if (session && session.messages.length > 0) {
+        // Hide skeleton immediately if we have messages
+        if (skeletonTimerRef.current) {
+          clearTimeout(skeletonTimerRef.current);
+        }
+        setShowSkeleton(false);
+      }
+    }
+  }, [currentSessionId, isInitializing]);
 
   // Load messages from current session
   useEffect(() => {
@@ -220,7 +245,19 @@ export function ChatPage() {
 
   const handleRegenerate = (messageId: string) => {
     addToast('Regenerating response...', 'info');
-    // Could implement regeneration logic here
+    // Find the user message before this agent message
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex > 0) {
+      // Get the user message that triggered this response
+      const userMessage = messages[messageIndex - 1];
+      if (userMessage && userMessage.type === 'user') {
+        // Delete current agent message
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+        // Re-send user message
+        wsSend(userMessage.content);
+        setIsLoading(true);
+      }
+    }
   };
 
   const handleCopy = (content: string) => {
@@ -232,6 +269,12 @@ export function ChatPage() {
     // Optimistic delete - remove immediately from UI
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
     addToast('Message deleted', 'success');
+  };
+
+  const handleReply = (content: string) => {
+    // Set input to quote the message
+    setInputValue(`> ${content.split('\n')[0]}\n\n`);
+    textareaRef.current?.focus();
   };
 
   const handleCommand = (commandId: string) => {
@@ -358,6 +401,7 @@ export function ChatPage() {
                     onRegenerate={() => handleRegenerate(msg.id)}
                     onCopy={() => handleCopy(msg.content)}
                     onDelete={() => handleDelete(msg.id)}
+                    onReply={() => handleReply(msg.content)}
                   />
                 </motion.div>
               ))}

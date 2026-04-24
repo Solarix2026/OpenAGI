@@ -214,5 +214,5 @@ class VoiceEngine:
                     time.sleep(0.1)  # Micro-pause between sentences
 
     def stop(self):
-        """Stop continuous mode.""
+        """Stop continuous mode."""
         self.running = False

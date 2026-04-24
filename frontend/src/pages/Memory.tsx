@@ -1,5 +1,5 @@
 // Memory Page with real API data + WebSocket real-time
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getWebSocketManager } from '../services/websocket';
 import { Button, Icon, Icons } from '../components/common';
@@ -34,9 +34,11 @@ export function MemoryPage() {
   const [visualizationMode, setVisualizationMode] = useState<'list' | 'graph'>('list');
   const [refreshKey, setRefreshKey] = useState(0);
   const { addToast } = useToast();
+  const loadingStartTime = useRef<number>(0);
 
   // Load memory events from API
   const loadMemory = useCallback(async () => {
+    loadingStartTime.current = Date.now();
     setLoading(true);
     try {
       const data = await apiClient.getRecentMemory(100);
@@ -55,7 +57,14 @@ export function MemoryPage() {
       addToast('Failed to load memory events', 'error');
       setEvents([]);
     } finally {
-      setLoading(false);
+      // Minimum loading time to prevent flash
+      const elapsed = Date.now() - (loadingStartTime.current || 0);
+      const minLoadingTime = 300;
+      if (elapsed < minLoadingTime) {
+        setTimeout(() => setLoading(false), minLoadingTime - elapsed);
+      } else {
+        setLoading(false);
+      }
     }
   }, [addToast]);
 

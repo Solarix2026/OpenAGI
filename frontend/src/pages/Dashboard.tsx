@@ -59,8 +59,8 @@ export function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Load data
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const [statusData, capabilitiesData, memoryData] = await Promise.all([
         apiClient.getStatus().catch(() => null),
@@ -113,7 +113,7 @@ export function DashboardPage() {
   // Re-fetch when refresh key changes
   useEffect(() => {
     if (refreshKey > 0) {
-      loadData();
+      loadData(false);
     }
   }, [refreshKey, loadData]);
 

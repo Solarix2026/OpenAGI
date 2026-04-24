@@ -1,5 +1,5 @@
 // Channels Page with real API data
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { apiClient } from '../services/api';
 import { Button, Icon, Icons } from '../components/common';
@@ -42,10 +42,12 @@ export function ChannelsPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
+  const loadingStartTime = useRef<number>(0);
 
   // Load channel status from settings
   const loadChannels = useCallback(async () => {
     try {
+      loadingStartTime.current = Date.now();
       setLoading(true);
       const settings = await apiClient.getSettings().catch(() => null);
 
@@ -93,9 +95,16 @@ export function ChannelsPage() {
       console.error('Failed to load channels:', error);
       addToast('Failed to load channels', 'error');
     } finally {
-      setLoading(false);
+      // Minimum loading time to prevent flash
+      const elapsed = Date.now() - (loadingStartTime.current || 0);
+      const minLoadingTime = 300;
+      if (elapsed < minLoadingTime) {
+        setTimeout(() => setLoading(false), minLoadingTime - elapsed);
+      } else {
+        setLoading(false);
+      }
     }
-  }, [addToast]);
+  }, []); // removed addToast
 
   useEffect(() => {
     loadChannels();
@@ -123,12 +132,17 @@ export function ChannelsPage() {
 
   if (loading) {
     return (
-      <div className={styles.channelsContainer}>
+      <motion.div
+        className={styles.channelsContainer}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+      >
         <div className={styles.header}>
           <h1>Channels</h1>
         </div>
         <SkeletonList items={3} />
-      </div>
+      </motion.div>
     );
   }
 

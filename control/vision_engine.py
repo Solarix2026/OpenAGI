@@ -48,12 +48,6 @@ class VisionEngine:
             image_path=image_path,
             max_tokens=max_tokens
         )
-                temperature=0.1
-            )
-            return resp.choices[0].message.content.strip()
-        except Exception as e:
-            log.error(f"Vision call failed: {e}")
-            return ""
 
     def analyze_screenshot(self, path: str) -> dict:
         """Describe current screen: what app, what's visible, what's interactive."""

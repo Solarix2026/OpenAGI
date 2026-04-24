@@ -19,7 +19,7 @@ interface LogEntry {
 }
 
 const LOG_LEVELS = [
-  { value: 'all', label: 'All Levels', color: 'var(--text)' },
+  { value: 'all', label: 'All Levels', color: 'var(--text-muted)' },
   { value: 'debug', label: 'Debug', color: 'var(--text-muted)' },
   { value: 'info', label: 'Info', color: 'var(--blue)' },
   { value: 'warning', label: 'Warning', color: 'var(--yellow)' },
@@ -53,6 +53,7 @@ export function LogsPage() {
   const listRef = useRef<List>(null);
   const logsRef = useRef<LogEntry[]>([]);
   const [newLogCount, setNewLogCount] = useState(0);
+  const loadingStartTime = useRef<number>(0);
 
   // Keep ref in sync for the row renderer
   logsRef.current = logs;
@@ -85,14 +86,22 @@ export function LogsPage() {
       console.error('Failed to fetch logs:', error);
       addToast('Failed to fetch logs from server', 'error');
     }
-  }, [levelFilter, moduleFilter, addToast]);
+  }, [levelFilter, moduleFilter]); // Removed addToast dependency
 
   // Initial load via REST API
   useEffect(() => {
     const loadInitial = async () => {
+      loadingStartTime.current = Date.now();
       setLoading(true);
       await fetchLogs();
-      setLoading(false);
+      // Minimum loading time to prevent flash
+      const elapsed = Date.now() - (loadingStartTime.current || 0);
+      const minLoadingTime = 300;
+      if (elapsed < minLoadingTime) {
+        setTimeout(() => setLoading(false), minLoadingTime - elapsed);
+      } else {
+        setLoading(false);
+      }
     };
     loadInitial();
   }, [fetchLogs]);
@@ -132,7 +141,7 @@ export function LogsPage() {
         if (isAutoScroll) {
           setTimeout(() => {
             if (listRef.current) {
-              listRef.current.scrollToItem(newLogs.length - 1, 'end');
+              listRef.current.scrollToItem(logs.length - 1, 'end');
             }
           }, 50);
         } else {
@@ -149,13 +158,6 @@ export function LogsPage() {
     };
   }, [isAutoScroll]);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    if (isAutoScroll && listRef.current && !loading && filteredLogs.length > 0) {
-      listRef.current.scrollToItem(filteredLogs.length - 1, 'end');
-    }
-  }, [logs, isAutoScroll, loading, filteredLogs.length]);
-
   // Filter logs client-side
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
@@ -166,6 +168,13 @@ export function LogsPage() {
       return matchesSearch;
     });
   }, [logs, searchQuery]);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (isAutoScroll && listRef.current && !loading && filteredLogs.length > 0) {
+      listRef.current.scrollToItem(filteredLogs.length - 1, 'end');
+    }
+  }, [logs, isAutoScroll, loading, searchQuery]);
 
   const handleClear = async () => {
     if (!confirm('Clear all logs?')) return;

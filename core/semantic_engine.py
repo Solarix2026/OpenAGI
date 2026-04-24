@@ -54,9 +54,12 @@ ROUTING RULES (highest priority first):
 11. "search arxiv for X", "find papers about X", "academic research X" → arxiv_search, query=X
 12. "world bank data X", "GDP of X", "economic data X" → worldbank_data, country=X
 13. "read this link/URL/website", "summarize this page", "extract from URL" → read_url, url=X
-14. "hire CTO/CMO/Developer/Researcher/Analyst" → hire_agent, role=X
+14. "hire CTO/CMO/Developer/Researcher/Analyst/CEO/SecurityEngineer/ProductManager" → hire_agent, role=X
 15. "ask/tell/delegate to CTO/researcher/developer", "assign task to X" → delegate_task, role=X, task=Y
-16. Everything else → conversation
+16. "use a [role] agent", "activate [specialist] agent", "hire a [specialist] agent", "get me a security expert", "frontend wizard to..." → activate_agent
+17. "what specialist agents are available", "list specialists", "what agents do you have" → list_agency_agents
+18. "auto delegate: X", "best specialist for X" → auto_delegate, task=X
+19. Everything else → conversation
 
 EXAMPLES:
 "create a note on my desktop" → {{"intent":"action","action":"write_file","parameters":{"path":"~/Desktop/note.txt","content":""},"confidence":0.97}
@@ -77,6 +80,9 @@ EXAMPLES:
 "read this web URL" → {{{"intent":"action","action":"read_url","parameters":{{"url":"URL"}},"confidence":0.95}}
 "hire a CTO" → {{{"intent":"action","action":"hire_agent","parameters":{{"role":"CTO"}},"confidence":0.95}}
 "ask the developer to write tests" → {{{"intent":"action","action":"delegate_task","parameters":{{"role":"Developer","task":"write tests"}},"confidence":0.93}}
+"use a frontend wizard to refactor this component" → {{{"intent":"action","action":"activate_agent","parameters":{{"agent":"frontend-developer","task":"refactor this component"}},"confidence":0.95}}
+"what specialist agents are available" → {{{"intent":"action","action":"list_agency_agents","parameters":{{}},"confidence":0.98}}
+"auto delegate: write a Python function to sort a list" → {{{"intent":"action","action":"auto_delegate","parameters":{{"task":"write a Python function to sort a list"}},"confidence":0.95}}
 """
 
 
@@ -174,18 +180,47 @@ class SemanticEngine:
             parts.append(f"Relevant memory:\n{memory_context}")
 
         if tool_result:
-            if tool_result.get("action") == "websearch":
-                data = tool_result.get("clean_summary", "")
-            else:
-                data = str(
-                    tool_result.get("data") or
-                    tool_result.get("content") or
-                    tool_result.get("stdout") or
-                    tool_result.get("message") or
-                    tool_result.get("error", "")
-                )[:600]
+            data = self._extract_tool_result_data(tool_result)
             status = "✅ SUCCESS" if tool_result.get("success") else "❌ FAILED"
             parts.append(f"Tool result [{status}]:\n{data}")
 
         parts.append(f"User said: {user_input}")
         return "\n\n".join(parts)
+
+    def _extract_tool_result_data(self, tool_result: dict) -> str:
+        """Extract meaningful data from tool result dict with comprehensive key coverage.
+
+        Priority order ensures we get the most meaningful data first:
+        1. Structured data (events, goals, results, reports)
+        2. Content/response data (clean_summary, content, message)
+        3. Status data (paths, URLs, counts)
+        4. Error data (error, stderr)
+
+        Handles all 33+ unique keys found in tool_executor.py.
+        """
+        # Special handling for websearch
+        if tool_result.get("action") == "websearch":
+            return tool_result.get("clean_summary", "")
+
+        # Priority-based key extraction
+        PRIORITY_KEYS = [
+            # Structured data (highest priority)
+            "data", "events", "goals", "results", "report", "summary", "answer",
+            # Content/response
+            "clean_summary", "content", "message", "stdout", "raw_text", "document", "topic", "question",
+            # Metadata
+            "count", "size", "bytes", "char_count", "result_count", "sources_searched", "returncode",
+            # Status/result
+            "path", "url", "saved_to", "watchlist", "focus", "status",
+            # Error (lowest priority)
+            "error", "stderr"
+        ]
+
+        for key in PRIORITY_KEYS:
+            if key in tool_result and tool_result[key]:
+                return str(tool_result[key])[:600]
+
+        # Fallback: any non-empty, non-success value
+        fallback = {k: v for k, v in tool_result.items()
+                   if k != "success" and v not in [None, "", []]}
+        return str(fallback)[:600]
