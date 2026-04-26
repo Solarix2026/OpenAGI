@@ -85,7 +85,7 @@ async def start_chat():
 
     try:
         async with websockets.connect(uri) as websocket:
-            print("✓ Connected to OpenAGI v5!")
+            print("Connected to OpenAGI v5!")
             print()
 
             session_id = f"chat-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
