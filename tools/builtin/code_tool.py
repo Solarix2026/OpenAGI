@@ -1,220 +1,315 @@
 # tools/builtin/code_tool.py
-"""Code execution and repair tool.
+"""Autonomous code execution and repair loop.
 
-Executes code in sandbox and attempts repairs on failures.
+This is the MetacognitiveEngine + Refinement Loop from the SMGI framework.
+
+Loop contract:
+1. Write code to temp file
+2. Execute in REPL sandbox
+3. SUCCESS → return result immediately
+4. ModuleNotFoundError → pip install missing dep → retry (no LLM needed)
+5. Other error → extract exact line/traceback → LLM surgical repair (str_replace only) → retry
+6. Max attempts exhausted → return failure with full repair_history for diagnostics
+
+NEVER rewrites entire file to fix a bug. Always str_replace on the exact failing line.
+This is the architectural invariant: surgical repair, not wholesale replacement.
 """
-from typing import Any
+from __future__ import annotations
+
+import json
+import re
+import tempfile
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Optional
 
 import structlog
 
+from gateway.llm_gateway import LLMGateway, LLMRequest
+from sandbox.repl import PythonREPL, REPLResult
 from tools.base_tool import BaseTool, ToolMeta, ToolResult
-from sandbox.repl import PythonREPL, REPLStatus
-from config.settings import get_settings
 
 logger = structlog.get_logger()
 
 
+@dataclass
+class RepairAttempt:
+    """Record of one repair attempt — full audit trail."""
+    attempt_number: int
+    error_type: str
+    error_message: str
+    action: str  # "install_dep" | "str_replace" | "full_rewrite_fallback"
+    old_str: str = ""
+    new_str: str = ""
+    dep_installed: str = ""
+    success: bool = False
+
+
+@dataclass
+class CodeResult:
+    """Result of execute_with_repair."""
+    success: bool
+    output: str = ""
+    error: str = ""
+    final_code: str = ""
+    attempts: int = 0
+    repair_history: list[RepairAttempt] = field(default_factory=list)
+    execution_time_ms: float = 0.0
+
+
 class CodeTool(BaseTool):
     """
-    Execute and repair code in sandbox.
+    The repair loop. Core of L2 capability.
 
-    - Executes code in isolated REPL
-    - Detects errors and missing modules
-    - Attempts automatic repairs
-    - Uses surgical str_replace (not full rewrite)
+    Usage:
+        tool = CodeTool(repl=repl, llm=gateway, max_attempts=5)
+        result = await tool.execute_with_repair(code)
     """
+
+    def __init__(
+        self,
+        repl: Optional[PythonREPL] = None,
+        llm: Optional[LLMGateway] = None,
+        max_attempts: int = 5,
+    ) -> None:
+        self.repl = repl or PythonREPL()
+        self.llm = llm
+        self.max_attempts = max_attempts
 
     @property
     def meta(self) -> ToolMeta:
         return ToolMeta(
             name="code",
-            description="Execute code in sandbox and attempt repairs on failures",
+            description=(
+                "Write and execute Python code. Autonomously repairs errors: "
+                "installs missing packages, applies surgical line-level fixes. "
+                "Returns output, error trace, and full repair history."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "Python code to execute"
-                    },
-                    "max_repair_attempts": {
-                        "type": "integer",
-                        "description": "Maximum repair attempts (default: from config)",
-                        "default": None
-                    }
+                    "code": {"type": "string", "description": "Python code to execute"},
+                    "max_attempts": {"type": "integer", "default": 5},
+                    "install_deps": {"type": "boolean", "default": True},
                 },
-                "required": ["code"]
+                "required": ["code"],
             },
-            risk_score=0.8,  # Code execution is high risk
-            categories=["code", "execution", "repair"],
-            examples=[
-                {
-                    "code": "print('Hello, world!')",
-                    "description": "Simple print statement"
-                }
-            ]
+            risk_score=0.5,
+            categories=["code", "execution"],
         )
 
-    async def execute(self, **kwargs) -> ToolResult:
-        """Execute code with repair loop."""
-        import time
-        start_time = time.time()
+    async def execute(self, code: str, max_attempts: int = 5, install_deps: bool = True, **kwargs) -> ToolResult:
+        result = await self.execute_with_repair(code, max_attempts=max_attempts, install_deps=install_deps)
+        return ToolResult(
+            success=result.success,
+            tool_name="code",
+            data={
+                "output": result.output,
+                "final_code": result.final_code,
+                "attempts": result.attempts,
+                "repair_history": [r.__dict__ for r in result.repair_history],
+            },
+            error=result.error,
+            execution_time_ms=result.execution_time_ms,
+        )
 
-        code = kwargs.get("code", "")
-        max_repair_attempts = kwargs.get("max_repair_attempts")
+    async def execute_with_repair(
+        self,
+        code: str,
+        max_attempts: int = None,
+        install_deps: bool = True,
+    ) -> CodeResult:
+        max_att = max_attempts or self.max_attempts
+        current_code = code
+        repair_history: list[RepairAttempt] = []
+        start = time.time()
 
-        if not code:
-            return ToolResult(
-                success=False,
-                tool_name=self.meta.name,
-                error="No code provided"
-            )
+        for attempt in range(1, max_att + 1):
+            logger.info("code.repair.attempt", attempt=attempt, max=max_att)
 
-        # Get max attempts from config if not specified
-        if max_repair_attempts is None:
-            config = get_settings()
-            max_repair_attempts = config.max_code_repair_attempts
+            repl_result: REPLResult = await self.repl.execute(current_code)
 
-        repl = PythonREPL()
-        repair_history = []
-
-        try:
-            # Initial execution
-            result = await repl.execute(code)
-
-            if result.success:
-                return ToolResult(
+            if repl_result.success:
+                return CodeResult(
                     success=True,
-                    tool_name=self.meta.name,
-                    data=result.output,
-                    execution_time_ms=(time.time() - start_time) * 1000,
-                    metadata={"attempts": 0, "repairs": 0}
+                    output=repl_result.output,
+                    final_code=current_code,
+                    attempts=attempt,
+                    repair_history=repair_history,
+                    execution_time_ms=(time.time() - start) * 1000,
                 )
 
-            # Repair loop
-            for attempt in range(max_repair_attempts):
-                if result.status == REPLStatus.SUCCESS:
-                    break
+            # ── Repair Decision Tree ──────────────────────────────────────────
+            error_type = repl_result.error_type or "UnknownError"
+            error_msg = repl_result.error
 
-                repair_history.append({
-                    "attempt": attempt + 1,
-                    "error": result.error,
-                    "error_type": result.error_type,
-                    "missing_modules": result.missing_modules
-                })
+            logger.warning("code.repair.error", attempt=attempt, error_type=error_type)
 
-                # Attempt repair based on error type
-                repaired_code = await self._attempt_repair(code, result)
+            # Path 1: Missing dependency — no LLM needed
+            if repl_result.missing_modules and install_deps:
+                for module in repl_result.missing_modules:
+                    pkg = self._module_to_package(module)
+                    logger.info("code.repair.installing", package=pkg)
+                    install_result = await self.repl.install_package(pkg)
 
-                if repaired_code == code:
-                    # No repair possible
-                    break
-
-                # Execute repaired code
-                result = await repl.execute(repaired_code)
-
-                if result.success:
-                    return ToolResult(
-                        success=True,
-                        tool_name=self.meta.name,
-                        data=result.output,
-                        execution_time_ms=(time.time() - start_time) * 1000,
-                        metadata={
-                            "attempts": attempt + 1,
-                            "repairs": attempt + 1,
-                            "repair_history": repair_history
-                        }
+                    repair = RepairAttempt(
+                        attempt_number=attempt,
+                        error_type="ModuleNotFoundError",
+                        error_message=error_msg,
+                        action="install_dep",
+                        dep_installed=pkg,
+                        success=install_result.success,
                     )
+                    repair_history.append(repair)
 
-                # Update code for next iteration
-                code = repaired_code
+                    if not install_result.success:
+                        logger.error("code.repair.install_failed", pkg=pkg)
+                continue  # Retry with same code after install
 
-            # All repair attempts failed
-            return ToolResult(
-                success=False,
-                tool_name=self.meta.name,
-                error=f"Code execution failed after {max_repair_attempts} repair attempts",
-                data=result.output,
-                execution_time_ms=(time.time() - start_time) * 1000,
-                metadata={
-                    "attempts": max_repair_attempts,
-                    "repairs": max_repair_attempts,
-                    "repair_history": repair_history,
-                    "final_error": result.error
-                }
+            # Path 2: Code error — LLM surgical repair
+            if self.llm is None:
+                break  # No LLM available, give up
+
+            repair_instruction = await self._get_surgical_repair(current_code, error_type, error_msg)
+
+            if repair_instruction is None:
+                logger.warning("code.repair.llm_gave_no_fix", attempt=attempt)
+                break
+
+            action = repair_instruction.get("action", "str_replace")
+            old_str = repair_instruction.get("old_str", "")
+            new_str = repair_instruction.get("new_str", "")
+
+            repair = RepairAttempt(
+                attempt_number=attempt,
+                error_type=error_type,
+                error_message=error_msg,
+                action=action,
+                old_str=old_str,
+                new_str=new_str,
             )
 
-        except Exception as e:
-            logger.exception("code.tool.error", error=str(e))
-            return ToolResult(
-                success=False,
-                tool_name=self.meta.name,
-                error=f"Code execution failed: {str(e)}",
-                execution_time_ms=(time.time() - start_time) * 1000
-            )
-        finally:
-            await repl.close()
+            if action == "str_replace" and old_str and old_str in current_code:
+                current_code = current_code.replace(old_str, new_str, 1)
+                repair.success = True
+                logger.info("code.repair.str_replace_applied", old=old_str[:50])
+            elif action == "full_rewrite":
+                # Last resort — only if str_replace impossible
+                rewritten = repair_instruction.get("code", "")
+                if rewritten:
+                    current_code = rewritten
+                    repair.success = True
+                    logger.warning("code.repair.full_rewrite_used")
+            else:
+                logger.warning("code.repair.old_str_not_found", old_str=old_str[:50])
 
-    async def _attempt_repair(self, code: str, result: Any) -> str:
-        """Attempt to repair code based on error."""
-        # Handle missing modules
-        if result.missing_modules:
-            for module in result.missing_modules:
-                # Try to install the module
-                repl = PythonREPL()
-                try:
-                    install_result = await repl.install_package(module)
-                    if install_result.success:
-                        logger.info("code.tool.installed_module", module=module)
-                finally:
-                    await repl.close()
-            return code  # Return original code, module installation is external
+            repair_history.append(repair)
 
-        # Handle common syntax errors with surgical fixes
-        if result.error_type == "SyntaxError":
-            # Fix missing colons
-            if "expected ':'" in result.error.lower():
-                lines = code.split("\n")
-                for i, line in enumerate(lines):
-                    stripped = line.strip()
-                    if (stripped.startswith(("def ", "class ", "if ", "elif ", "else:",
-                                        "for ", "while ", "try:", "except", "finally:",
-                                        "with ", "async ")) and
-                        not stripped.endswith(":")):
-                        lines[i] = line + ":"
-                return "\n".join(lines)
+        # All attempts exhausted
+        return CodeResult(
+            success=False,
+            error=f"Repair failed after {max_att} attempts. Last error: {repl_result.error}",
+            final_code=current_code,
+            attempts=max_att,
+            repair_history=repair_history,
+            execution_time_ms=(time.time() - start) * 1000,
+        )
 
-            # Fix missing parentheses
-            if "unexpected EOF" in result.error.lower():
-                # Count parentheses and add missing ones
-                open_parens = code.count("(")
-                close_parens = code.count(")")
-                if open_parens > close_parens:
-                    return code + ")" * (open_parens - close_parens)
+    async def _get_surgical_repair(
+        self,
+        code: str,
+        error_type: str,
+        error_msg: str,
+    ) -> Optional[dict]:
+        """Ask LLM for a surgical repair instruction.
 
-        # Handle indentation errors
-        if result.error_type == "IndentationError":
-            lines = code.split("\n")
-            fixed_lines = []
-            indent_level = 0
+        Returns a dict with action: str_replace + old_str + new_str,
+        or action: full_rewrite + code as last resort.
+        Never returns vague advice — always returns machine-actionable patch.
+        """
+        if self.llm is None:
+            return None
 
-            for line in lines:
-                stripped = line.strip()
-                if not stripped:
-                    fixed_lines.append(line)
-                    continue
+        # Extract line number from traceback if available
+        line_context = self._extract_error_context(code, error_msg)
 
-                # Increase indent after colons
-                if stripped.endswith(":"):
-                    fixed_lines.append(line)
-                    indent_level += 1
-                # Decrease indent for dedent keywords
-                elif stripped.startswith(("return", "break", "continue", "pass")):
-                    indent_level = max(0, indent_level - 1)
-                    fixed_lines.append("    " * indent_level + stripped)
-                else:
-                    fixed_lines.append("    " * indent_level + stripped)
+        prompt = f"""You are a code repair engine. Given a Python error, return ONLY a JSON repair instruction.
 
-            return "\n".join(fixed_lines)
+ERROR TYPE: {error_type}
+ERROR MESSAGE:
+{error_msg}
 
-        # No repair possible
-        return code
+FAILING CODE:
+```python
+{code}
+```
+
+ERROR CONTEXT (lines around error):
+{line_context}
+
+Return EXACTLY this JSON format (no markdown, no explanation):
+{{
+  "action": "str_replace",
+  "old_str": "<exact string to replace — must exist verbatim in code>",
+  "new_str": "<fixed replacement>",
+  "reasoning": "<one line>"
+}}
+
+If str_replace is impossible (structural rewrite needed):
+{{
+  "action": "full_rewrite",
+  "code": "<complete corrected code>",
+  "reasoning": "<one line>"
+}}
+
+Rules:
+- old_str must appear EXACTLY ONCE in the code
+- Fix ONLY the error — do not refactor or improve unrelated code
+- If the fix requires an import, add it at the top via str_replace on existing imports"""
+
+        from gateway.llm_gateway import LLMRequest
+        response = await self.llm.complete(LLMRequest(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+            temperature=0.0,  # Deterministic for code repair
+        ))
+
+        try:
+            raw = response.content.strip()
+            # Strip markdown fences if present
+            raw = re.sub(r"^```json?\s*|\s*```$", "", raw, flags=re.MULTILINE).strip()
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("code.repair.json_parse_failed", raw=response.content[:200])
+            return None
+
+    def _extract_error_context(self, code: str, error_msg: str, context_lines: int = 3) -> str:
+        """Extract lines around the error line number from traceback."""
+        lines = code.splitlines()
+        match = re.search(r"line (\d+)", error_msg)
+        if not match:
+            return code[:500]  # Return first 500 chars if no line number
+
+        line_num = int(match.group(1)) - 1
+        start = max(0, line_num - context_lines)
+        end = min(len(lines), line_num + context_lines + 1)
+
+        context = []
+        for i, line in enumerate(lines[start:end], start=start + 1):
+            marker = ">>>" if i == line_num + 1 else "   "
+            context.append(f"{marker} {i:3d}: {line}")
+        return "\n".join(context)
+
+    def _module_to_package(self, module: str) -> str:
+        """Map import name to pip package name for common mismatches."""
+        mappings = {
+            "cv2": "opencv-python",
+            "PIL": "Pillow",
+            "sklearn": "scikit-learn",
+            "bs4": "beautifulsoup4",
+            "yaml": "pyyaml",
+            "dotenv": "python-dotenv",
+            "faiss": "faiss-cpu",
+        }
+        return mappings.get(module, module)

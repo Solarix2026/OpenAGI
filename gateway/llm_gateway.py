@@ -37,6 +37,26 @@ class LLMMessage:
     content: str
 
 
+@dataclass
+class LLMRequest:
+    """Unified request format for LLM calls (compatibility layer)."""
+    messages: list[dict[str, str]]
+    system: str = ""
+    max_tokens: int = 1024
+    temperature: float = 0.2
+    stream: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_llm_messages(self) -> list[LLMMessage]:
+        """Convert to LLMMessage format."""
+        result = []
+        if self.system:
+            result.append(LLMMessage(role="system", content=self.system))
+        for msg in self.messages:
+            result.append(LLMMessage(role=msg.get("role", "user"), content=msg.get("content", "")))
+        return result
+
+
 @dataclass(frozen=True)
 class LLMResponse:
     """Response from an LLM provider."""
@@ -162,7 +182,7 @@ class LLMGateway:
 
     async def complete(
         self,
-        messages: list[LLMMessage],
+        messages: list[LLMMessage] | LLMRequest,
         provider: Optional[LLMProvider] = None,
         **kwargs
     ) -> LLMResponse:
@@ -170,13 +190,22 @@ class LLMGateway:
         Get a completion from the LLM.
 
         Args:
-            messages: Conversation history
+            messages: Conversation history (LLMMessage list or LLMRequest)
             provider: Force specific provider (auto-select if None)
             **kwargs: Additional parameters (temperature, max_tokens, etc.)
 
         Returns:
             LLMResponse with content and metadata
         """
+        # Handle LLMRequest compatibility
+        if isinstance(messages, LLMRequest):
+            llm_messages = messages.to_llm_messages()
+            # Extract kwargs from LLMRequest
+            kwargs.setdefault("temperature", messages.temperature)
+            kwargs.setdefault("max_tokens", messages.max_tokens)
+            kwargs.setdefault("stream", messages.stream)
+            messages = llm_messages
+
         # Auto-select provider if not specified
         if provider is None:
             # Use last user message for complexity detection
@@ -243,9 +272,23 @@ class LLMGateway:
             )
             raise
 
+    async def stream(
+        self,
+        messages: list[LLMMessage] | LLMRequest,
+        provider: Optional[LLMProvider] = None,
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """
+        Stream completion from the LLM (compatibility method).
+
+        Yields content chunks as they arrive.
+        """
+        async for chunk in self.complete_stream(messages, provider, **kwargs):
+            yield chunk
+
     async def complete_stream(
         self,
-        messages: list[LLMMessage],
+        messages: list[LLMMessage] | LLMRequest,
         provider: Optional[LLMProvider] = None,
         **kwargs
     ) -> AsyncIterator[str]:
@@ -254,6 +297,17 @@ class LLMGateway:
 
         Yields content chunks as they arrive.
         """
+        # Handle LLMRequest compatibility
+        if isinstance(messages, LLMRequest):
+            llm_messages = messages.to_llm_messages()
+            # Extract kwargs from LLMRequest
+            kwargs.setdefault("temperature", messages.temperature)
+            kwargs.setdefault("max_tokens", messages.max_tokens)
+            kwargs.setdefault("stream", True)
+            messages = llm_messages
+        else:
+            kwargs.setdefault("stream", True)
+
         # Auto-select provider if not specified
         if provider is None:
             last_user_msg = next(

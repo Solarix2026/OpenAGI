@@ -22,10 +22,10 @@ def main():
     )
 
     agent_name_str = str(config.agent_name)
-    print(f"╔═══════════════════════════════════════════════════════════╗")
-    print(f"║  {agent_name_str:^53}  ║")
-    print(f"║  Self-Repairing, Tool-Discovering Agent System           ║")
-    print(f"╚═══════════════════════════════════════════════════════════╝")
+    print(f"{'='*60}")
+    print(f"  {agent_name_str:^56}  ")
+    print(f"  Self-Repairing, Tool-Discovering Agent System           ")
+    print(f"{'='*60}")
     print(f"  API Server: http://{config.api_host}:{config.api_port}")
     print(f"  WebSocket:  ws://{config.api_host}:{config.api_port}/ws")
     print(f"  Health:     http://{config.api_host}:{config.api_port}/health")
@@ -33,8 +33,12 @@ def main():
     print(f"  Press Ctrl+C to stop")
     print(f"")
 
+    # Import and create the app
+    from api.server import create_app
+    app = create_app(settings=config)
+
     uvicorn.run(
-        "api.server:app",
+        app,
         host=config.api_host,
         port=config.api_port,
         log_level=config.log_level.lower(),

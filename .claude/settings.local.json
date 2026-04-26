@@ -3,7 +3,16 @@
     "allow": [
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(git reset:*)",
+      "Bash(ls -la config/.env*)",
+      "Bash(PYTHONPATH=. python -m pytest tests/skills/test_loader.py -v)",
+      "Bash(find . -type d -name __pycache__ -exec rm -rf {} +)",
+      "Bash(find . -type f -name \"*.pyc\" -delete)"
     ]
   }
 }

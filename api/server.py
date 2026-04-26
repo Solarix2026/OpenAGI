@@ -1,185 +1,144 @@
 # api/server.py
-"""FastAPI WebSocket + REST API.
+"""FastAPI server — WebSocket for streaming, REST for health/status.
 
-Provides external interface for the agent.
+WebSocket protocol:
+  Client → { "type": "message", "content": "...", "session_id": "..." }
+  Server → { "type": "token", "content": "..." }  (streaming)
+  Server → { "type": "done" }                      (end of response)
+  Server → { "type": "error", "content": "..." }   (on error)
+
+REST endpoints:
+  GET  /health           → { "status": "ok", "agent": "...", "tools": N }
+  GET  /tools            → list of registered tools
+  GET  /skills           → list of loaded skills
+  POST /memory/recall    → { "query": "...", "layer": "..." } → results
 """
-from contextlib import asynccontextmanager
-from typing import Any
+from __future__ import annotations
+
+import json
+import uuid
+from typing import Optional
 
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-from config.settings import get_settings
+from config.settings import Settings
 from core.kernel import Kernel
-from core.telos_core import TelosCore
-from memory.memory_core import MemoryCore
-from tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
 
-# Global kernel instance
-_kernel: Kernel | None = None
-_registry: ToolRegistry | None = None
 
+def create_app(settings: Optional[Settings] = None, kernel: Optional[Kernel] = None) -> FastAPI:
+    settings = settings or Settings()
+    app = FastAPI(title="OpenAGI v5", version="5.0.0")
 
-async def get_kernel() -> Kernel:
-    """Get or create kernel instance."""
-    global _kernel
-    if _kernel is None:
-        telos = TelosCore()
-        _kernel = Kernel(telos=telos)
-    return _kernel
-
-
-async def get_registry() -> ToolRegistry:
-    """Get or create registry instance."""
-    global _registry
-    if _registry is None:
-        _registry = ToolRegistry()
-    return _registry
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup/shutdown."""
-    # Startup
-    logger.info("api.server.starting")
-    await get_kernel()
-    await get_registry()
-    logger.info("api.server.started")
-
-    yield
-
-    # Shutdown
-    logger.info("api.server.shutting_down")
-    global _kernel
-    if _kernel:
-        await _kernel.close()
-        _kernel = None
-    logger.info("api.server.shutdown")
-
-
-app = FastAPI(
-    title="OpenAGI v5",
-    description="Self-Repairing, Tool-Discovering Agent System",
-    version="5.0.0",
-    lifespan=lifespan,
-)
-
-
-@app.get("/health")
-async def health_check() -> dict[str, Any]:
-    """Health check endpoint."""
-    return {"status": "healthy", "agent": "OpenAGI-v5"}
-
-
-@app.get("/status")
-async def get_status() -> dict[str, Any]:
-    """Get kernel status."""
-    kernel = await get_kernel()
-    return kernel.get_status()
-
-
-@app.get("/tools")
-async def list_tools() -> list[dict[str, Any]]:
-    """List available tools."""
-    registry = await get_registry()
-    tools = registry.list_tools()
-    return [
-        {
-            "name": tool.name,
-            "description": tool.description,
-            "risk_score": tool.risk_score,
-            "categories": tool.categories,
-        }
-        for tool in tools
-    ]
-
-
-@app.get("/tools/discover")
-async def discover_tools(query: str) -> list[dict[str, Any]]:
-    """Discover tools matching query."""
-    registry = await get_registry()
-    results = registry.discover(query)
-    return [
-        {
-            "name": tool.name,
-            "description": tool.description,
-            "risk_score": tool.risk_score,
-        }
-        for tool in results
-    ]
-
-
-@app.get("/memory/stats")
-async def memory_stats() -> dict[str, Any]:
-    """Get memory statistics."""
-    kernel = await get_kernel()
-    return kernel.memory.get_stats()
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for streaming execution."""
-    await websocket.accept()
-    kernel = await get_kernel()
-
-    try:
-        while True:
-            # Receive message
-            data = await websocket.receive_text()
-            message = data.strip()
-
-            if not message:
-                continue
-
-            if message.startswith("/"):
-                # Handle commands
-                parts = message.split(maxsplit=1)
-                command = parts[0]
-                args = parts[1] if len(parts) > 1 else ""
-
-                if command == "/run":
-                    # Execute goal and stream results
-                    async for chunk in kernel.run(args):
-                        await websocket.send_text(chunk)
-                    await websocket.send_text("[DONE]")
-
-                elif command == "/chat":
-                    # Chat and stream response
-                    async for chunk in kernel.chat(args):
-                        await websocket.send_text(chunk)
-                    await websocket.send_text("[DONE]")
-
-                elif command == "/status":
-                    status = kernel.get_status()
-                    await websocket.send_json({"type": "status", "data": status})
-
-                else:
-                    await websocket.send_text(f"Unknown command: {command}")
-
-            else:
-                # Default: treat as chat message
-                async for chunk in kernel.chat(message):
-                    await websocket.send_text(chunk)
-                await websocket.send_text("[DONE]")
-
-    except WebSocketDisconnect:
-        logger.info("websocket.disconnected")
-    except Exception as e:
-        logger.exception("websocket.error", error=str(e))
-        await websocket.send_text(f"Error: {str(e)}")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    from config.settings import get_settings
-
-    config = get_settings()
-    uvicorn.run(
-        "api.server:app",
-        host=config.api_host,
-        port=config.api_port,
-        reload=False,
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
+
+    # Lazy kernel init — created on startup if not injected
+    _kernel: dict[str, Kernel] = {}
+
+    @app.on_event("startup")
+    async def startup():
+        from core.telos_core import TelosCore
+        telos = TelosCore()
+        k = kernel or Kernel(telos=telos)
+        _kernel["instance"] = k
+        logger.info("server.startup.complete")
+
+    @app.on_event("shutdown")
+    async def shutdown():
+        if "instance" in _kernel:
+            k = _kernel["instance"]
+            if hasattr(k, 'close'):
+                await k.close()
+        logger.info("server.shutdown")
+
+    @app.get("/health")
+    async def health():
+        k = _kernel.get("instance")
+        return {
+            "status": "ok",
+            "agent": settings.agent_name,
+            "tools": len(k.registry.list_tools()) if k else 0,
+        }
+
+    @app.get("/tools")
+    async def list_tools():
+        k = _kernel.get("instance")
+        if not k:
+            return {"tools": []}
+        return {"tools": [
+            {"name": t.name, "description": t.description, "risk": t.risk_score}
+            for t in k.registry.list_tools()
+        ]}
+
+    @app.get("/skills")
+    async def list_skills():
+        k = _kernel.get("instance")
+        if not k or not hasattr(k, "skill_loader"):
+            return {"skills": []}
+        return {"skills": [
+            {"name": s.name, "capabilities": s.capabilities}
+            for s in k.skill_loader.list_skills()
+        ]}
+
+    @app.post("/memory/recall")
+    async def recall(body: dict):
+        k = _kernel.get("instance")
+        if not k:
+            return {"results": []}
+        from memory.memory_core import MemoryLayer
+        layer_str = body.get("layer", "working").upper()
+        try:
+            layer = MemoryLayer[layer_str]
+        except KeyError:
+            layer = MemoryLayer.WORKING
+        items = await k.memory.recall(body.get("query", ""), [layer], top_k=5)
+        return {"results": [{"content": i.content, "confidence": i.confidence_score} for i in items]}
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(ws: WebSocket):
+        await ws.accept()
+        logger.info("ws.connected", client=ws.client)
+
+        try:
+            while True:
+                raw = await ws.receive_text()
+                try:
+                    msg = json.loads(raw)
+                except json.JSONDecodeError:
+                    await ws.send_json({"type": "error", "content": "Invalid JSON"})
+                    continue
+
+                if msg.get("type") != "message":
+                    continue
+
+                content = msg.get("content", "").strip()
+                if not content:
+                    continue
+
+                session_id = msg.get("session_id", f"ws-{uuid.uuid4().hex[:8]}")
+                k = _kernel.get("instance")
+                if not k:
+                    await ws.send_json({"type": "error", "content": "Kernel not ready"})
+                    continue
+
+                # Stream tokens
+                try:
+                    async for token in k.run(content, session_id=session_id):
+                        await ws.send_json({"type": "token", "content": token})
+                    await ws.send_json({"type": "done"})
+                except Exception as e:
+                    logger.exception("ws.stream_error", error=str(e))
+                    await ws.send_json({"type": "error", "content": str(e)})
+
+        except WebSocketDisconnect:
+            logger.info("ws.disconnected", client=ws.client)
+
+    return app

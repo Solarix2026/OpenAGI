@@ -1,9 +1,9 @@
 # skills/__init__.py
 """Skills components for OpenAGI v5."""
-from skills.skill_loader import SkillLoader, Skill, SkillStatus
+# Removed direct imports to avoid circular dependency issues
+# Import directly: from skills.skill_loader import SkillLoader, SkillMeta
 
 __all__ = [
     "SkillLoader",
-    "Skill",
-    "SkillStatus",
+    "SkillMeta",
 ]
