@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     """Main settings class. All configuration lives here."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=BASE_DIR / "config" / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
     )

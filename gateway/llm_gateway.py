@@ -102,7 +102,13 @@ class LLMGateway:
 
         Simple queries → Groq (fast)
         Complex queries → NIM (quality)
+
+        Note: Respects primary_provider setting for routing.
         """
+        # If primary provider is not Groq, use it directly
+        if self.primary_provider != LLMProvider.GROQ:
+            return self.primary_provider
+
         query_lower = query.lower()
 
         # Check for complexity keywords
@@ -124,33 +130,41 @@ class LLMGateway:
             return {
                 "api_key": self.config.nvidia_nim_api_key.get_secret_value(),
                 "base_url": str(self.config.nvidia_nim_base_url),
+                "endpoint": "/v1/chat/completions",  # NVIDIA NIM uses /v1/ prefix
                 "model": self.config.nvidia_nim_model,
                 "temperature": self.config.nvidia_nim_temperature,
                 "max_tokens": self.config.nvidia_nim_max_tokens,
+                "auth_header": "Authorization",  # NVIDIA NIM uses standard Bearer token
             }
         elif provider == LLMProvider.GROQ:
             return {
                 "api_key": self.config.groq_api_key.get_secret_value(),
                 "base_url": "https://api.groq.com/openai/v1",
+                "endpoint": "/chat/completions",
                 "model": self.config.groq_model,
                 "temperature": self.config.groq_temperature,
                 "max_tokens": self.config.groq_max_tokens,
+                "auth_header": "Authorization",  # Groq uses standard Authorization header
             }
         elif provider == LLMProvider.OPENAI:
             return {
                 "api_key": self.config.openai_api_key.get_secret_value(),
                 "base_url": "https://api.openai.com/v1",
+                "endpoint": "/chat/completions",
                 "model": self.config.openai_model,
                 "temperature": 0.7,
                 "max_tokens": 4096,
+                "auth_header": "Authorization",  # OpenAI uses standard Authorization header
             }
         elif provider == LLMProvider.OLLAMA:
             return {
                 "api_key": "",  # Ollama doesn't need API key
                 "base_url": str(self.config.ollama_base_url),
+                "endpoint": "/v1/chat/completions",
                 "model": self.config.ollama_model,
                 "temperature": 0.7,
                 "max_tokens": 4096,
+                "auth_header": None,  # Ollama doesn't need auth
             }
         else:
             raise ValueError(f"Unknown provider: {provider}")
@@ -227,12 +241,16 @@ class LLMGateway:
             "Content-Type": "application/json",
         }
 
-        if config["api_key"]:
-            headers["Authorization"] = f"Bearer {config['api_key']}"
+        auth_header = config.get("auth_header", "Authorization")
+        if config["api_key"] and auth_header:
+            if auth_header == "Authorization":
+                headers["Authorization"] = f"Bearer {config['api_key']}"
+            else:
+                headers[auth_header] = config["api_key"]
 
         try:
             response = await client.post(
-                f"{config['base_url']}/chat/completions",
+                f"{config['base_url'].rstrip('/')}{config['endpoint']}",
                 json=body,
                 headers=headers,
             )
@@ -303,10 +321,8 @@ class LLMGateway:
             # Extract kwargs from LLMRequest
             kwargs.setdefault("temperature", messages.temperature)
             kwargs.setdefault("max_tokens", messages.max_tokens)
-            kwargs.setdefault("stream", True)
+            # Don't set stream here - it's always True for this method
             messages = llm_messages
-        else:
-            kwargs.setdefault("stream", True)
 
         # Auto-select provider if not specified
         if provider is None:
@@ -321,20 +337,25 @@ class LLMGateway:
         client = await self._get_client()
 
         # Build request with streaming enabled
-        body = self._build_request_body(messages, provider, stream=True, **kwargs)
+        body = self._build_request_body(messages, provider, **kwargs)
+        body["stream"] = True  # Always enable streaming for this method
 
         # Make API call
         headers = {
             "Content-Type": "application/json",
         }
 
-        if config["api_key"]:
-            headers["Authorization"] = f"Bearer {config['api_key']}"
+        auth_header = config.get("auth_header", "Authorization")
+        if config["api_key"] and auth_header:
+            if auth_header == "Authorization":
+                headers["Authorization"] = f"Bearer {config['api_key']}"
+            else:
+                headers[auth_header] = config["api_key"]
 
         try:
             async with client.stream(
                 "POST",
-                f"{config['base_url']}/chat/completions",
+                f"{config['base_url'].rstrip('/')}{config['endpoint']}",
                 json=body,
                 headers=headers,
             ) as response:
