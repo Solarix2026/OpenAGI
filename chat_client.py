@@ -9,7 +9,7 @@ from datetime import datetime
 
 async def chat_client():
     """Interactive chat client for OpenAGI."""
-    uri = "ws://localhost:8000/ws"
+    uri = "ws://localhost:8000/ws"  # Use localhost for client connections
 
     print("=" * 60)
     print("  OpenAGI v5 - Interactive Chat")

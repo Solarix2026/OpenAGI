@@ -36,11 +36,14 @@ def print_banner(mode: str = "server"):
     if mode == "server":
         print(f"  Mode: API Server")
         print(f"  API Server: http://{config.api_host}:{config.api_port}")
-        print(f"  WebSocket:  ws://{config.api_host}:{config.api_port}/ws")
+        # Show localhost URL for clients
+        client_host = "localhost" if config.api_host == "0.0.0.0" else config.api_host
+        print(f"  WebSocket:  ws://{client_host}:{config.api_port}/ws")
         print(f"  Health:     http://{config.api_host}:{config.api_port}/health")
     elif mode == "chat":
         print(f"  Mode: CLI Chat")
-        print(f"  Connecting to: ws://{config.api_host}:{config.api_port}/ws")
+        client_host = "localhost" if config.api_host == "0.0.0.0" else config.api_host
+        print(f"  Connecting to: ws://{client_host}:{config.api_port}/ws")
     elif mode == "check":
         print(f"  Mode: System Health Check")
 
@@ -72,7 +75,9 @@ async def start_chat():
     config = get_settings()
     print_banner("chat")
 
-    uri = f"ws://{config.api_host}:{config.api_port}/ws"
+    # Use localhost for client connections (0.0.0.0 is for server binding only)
+    client_host = "localhost" if config.api_host == "0.0.0.0" else config.api_host
+    uri = f"ws://{client_host}:{config.api_port}/ws"
 
     print(f"Connecting to: {uri}")
     print("Type 'quit' or 'exit' to stop")
