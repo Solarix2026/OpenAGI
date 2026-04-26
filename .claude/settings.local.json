@@ -12,7 +12,8 @@
       "Bash(ls -la config/.env*)",
       "Bash(PYTHONPATH=. python -m pytest tests/skills/test_loader.py -v)",
       "Bash(find . -type d -name __pycache__ -exec rm -rf {} +)",
-      "Bash(find . -type f -name \"*.pyc\" -delete)"
+      "Bash(find . -type f -name \"*.pyc\" -delete)",
+      "Bash(git push:*)"
     ]
   }
 }

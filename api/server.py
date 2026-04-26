@@ -110,35 +110,51 @@ def create_app(settings: Optional[Settings] = None, kernel: Optional[Kernel] = N
         try:
             while True:
                 raw = await ws.receive_text()
+                logger.info("ws.message_received", length=len(raw))
+
                 try:
                     msg = json.loads(raw)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    logger.error("ws.json_error", error=str(e))
                     await ws.send_json({"type": "error", "content": "Invalid JSON"})
                     continue
 
                 if msg.get("type") != "message":
+                    logger.warning("ws.invalid_type", msg_type=msg.get("type"))
                     continue
 
                 content = msg.get("content", "").strip()
                 if not content:
+                    logger.warning("ws.empty_content")
                     continue
 
                 session_id = msg.get("session_id", f"ws-{uuid.uuid4().hex[:8]}")
                 k = _kernel.get("instance")
                 if not k:
+                    logger.error("ws.kernel_not_ready")
                     await ws.send_json({"type": "error", "content": "Kernel not ready"})
                     continue
 
-                # Stream tokens
+                # Stream tokens - use chat() for conversational responses
                 try:
-                    async for token in k.run(content, session_id=session_id):
+                    logger.info("ws.starting_stream", session_id=session_id)
+                    token_count = 0
+                    async for token in k.chat(content):
+                        token_count += 1
                         await ws.send_json({"type": "token", "content": token})
                     await ws.send_json({"type": "done"})
+                    logger.info("ws.stream_complete", tokens=token_count)
                 except Exception as e:
                     logger.exception("ws.stream_error", error=str(e))
                     await ws.send_json({"type": "error", "content": str(e)})
 
-        except WebSocketDisconnect:
-            logger.info("ws.disconnected", client=ws.client)
+        except WebSocketDisconnect as e:
+            logger.info("ws.disconnected", client=ws.client, code=e.code)
+        except Exception as e:
+            logger.exception("ws.unexpected_error", error=str(e))
+            try:
+                await ws.send_json({"type": "error", "content": f"Unexpected error: {str(e)}"})
+            except:
+                pass
 
     return app

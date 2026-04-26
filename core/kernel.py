@@ -146,29 +146,43 @@ class Kernel:
 
         Uses LLM Gateway for response generation.
         """
-        # Query memories
-        memories = await self.memory.recall(
-            query=message,
-            layers=[MemoryLayer.EPISODIC, MemoryLayer.WORKING],
-            top_k=3
-        )
+        logger.info("kernel.chat_start", message_length=len(message))
 
-        context = ""
-        if memories:
-            context = "\n".join([m.content for m in memories[:3]])
+        try:
+            # Query memories
+            memories = await self.memory.recall(
+                query=message,
+                layers=[MemoryLayer.EPISODIC, MemoryLayer.WORKING],
+                top_k=3
+            )
 
-        # Build messages
-        messages = [
-            LLMMessage(role="system",
-                content=f"You are {self.config.agent_name}."),
-            LLMMessage(role="system",
-                content=f"Relevant context:\n{context}" if context else ""),
-            LLMMessage(role="user", content=message),
-        ]
+            context = ""
+            if memories:
+                context = "\n".join([m.content for m in memories[:3]])
+                logger.info("kernel.chat_memories_found", count=len(memories))
 
-        # Stream response
-        async for chunk in self.gateway.complete_stream(messages):
-            yield chunk
+            # Build messages
+            messages = [
+                LLMMessage(role="system",
+                    content=f"You are {self.config.agent_name}, a helpful AI assistant."),
+                LLMMessage(role="system",
+                    content=f"Relevant context:\n{context}" if context else ""),
+                LLMMessage(role="user", content=message),
+            ]
+
+            logger.info("kernel.chat_streaming_start")
+
+            # Stream response
+            token_count = 0
+            async for chunk in self.gateway.complete_stream(messages):
+                token_count += 1
+                yield chunk
+
+            logger.info("kernel.chat_complete", tokens=token_count)
+
+        except Exception as e:
+            logger.exception("kernel.chat_error", error=str(e))
+            yield f"\n[Error: {str(e)}]"
 
     def get_status(self) -> dict[str, Any]:
         """Get kernel status."""
