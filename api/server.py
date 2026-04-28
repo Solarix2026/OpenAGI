@@ -19,12 +19,16 @@ import json
 import uuid
 from typing import Optional
 
-import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import Settings
+from config.logging_config import configure_logging
 from core.kernel import Kernel
+
+# Configure logging first
+configure_logging()
+import structlog
 
 logger = structlog.get_logger()
 

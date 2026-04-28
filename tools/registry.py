@@ -9,8 +9,10 @@ Agents query discover(query) → get [ToolMeta] → decide → invoke.
 """
 import hashlib
 import importlib
+import importlib.util
 import inspect
 import json
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -212,6 +214,7 @@ class ToolRegistry:
                     file,
                 )
                 module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module  # Register before exec_module
                 spec.loader.exec_module(module)
 
                 # Find tool classes

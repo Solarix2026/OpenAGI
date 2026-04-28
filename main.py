@@ -15,10 +15,14 @@ import sys
 import websockets
 from datetime import datetime
 
-import structlog
 import uvicorn
 
 from config.settings import get_settings
+from config.logging_config import configure_logging
+
+# Configure logging first
+configure_logging()
+import structlog
 
 logger = structlog.get_logger()
 

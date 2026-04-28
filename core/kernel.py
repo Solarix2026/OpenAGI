@@ -22,6 +22,7 @@ from core.telos_core import TelosCore, AlignmentResult, TelosAction
 from agents.planner import Planner, TaskGraph, TaskStatus
 from agents.executor import Executor
 from agents.reflector import Reflector
+from agents.tool_caller import ToolCallerAgent
 from tools.registry import ToolRegistry
 from memory.memory_core import MemoryCore, MemoryLayer
 from gateway.llm_gateway import LLMGateway, LLMMessage, LLMResponse
@@ -57,6 +58,7 @@ class Kernel:
         executor: Optional[Executor] = None,
         reflector: Optional[Reflector] = None,
         gateway: Optional[LLMGateway] = None,
+        skill_loader: Optional["SkillLoader"] = None,
     ):
         """Initialize kernel with all components."""
         self.config = get_settings()
@@ -67,6 +69,30 @@ class Kernel:
         self.executor = executor or Executor(self.planner, self.registry, telos)
         self.reflector = reflector or Reflector(self.memory, telos)
         self.gateway = gateway or LLMGateway()
+        self.tool_caller = ToolCallerAgent(self.registry, self.gateway)
+
+        # Auto-load builtin tools
+        from pathlib import Path
+        builtin_path = Path(__file__).parent.parent / "tools" / "builtin"
+        registered = self.registry.scan_builtin_directory(builtin_path)
+        logger.info("kernel.builtin_tools_loaded", count=registered)
+
+        # Inject dependencies into tools that need them
+        self._inject_tool_dependencies()
+
+        # Initialize skill loader
+        if skill_loader is None:
+            from skills.skill_loader import SkillLoader
+            self.skill_loader = SkillLoader(
+                llm=self.gateway,
+                registry=self.registry,
+                telos=telos,
+            )
+            # Load builtin skills
+            loaded = self.skill_loader.scan()
+            logger.info("kernel.skills_loaded", count=loaded)
+        else:
+            self.skill_loader = skill_loader
 
         self.state = KernelState(
             initialized=True,
@@ -74,7 +100,26 @@ class Kernel:
         )
 
         logger.info("kernel.initialized",
-            agent_name=self.config.agent_name)
+            agent_name=self.config.agent_name,
+            tools_loaded=registered)
+
+    def _inject_tool_dependencies(self) -> None:
+        """Inject kernel dependencies into tools that need them."""
+        # Inject memory core into MemoryTool
+        memory_tool = self.registry.get("memory")
+        if memory_tool and hasattr(memory_tool, "memory_core"):
+            memory_tool.memory_core = self.memory
+
+        # Inject REPL and LLM into CodeTool
+        code_tool = self.registry.get("code")
+        if code_tool:
+            from sandbox.repl import PythonREPL
+            if hasattr(code_tool, "repl") and code_tool.repl is None:
+                code_tool.repl = PythonREPL()
+            if hasattr(code_tool, "llm") and code_tool.llm is None:
+                code_tool.llm = self.gateway
+
+        logger.info("kernel.tool_dependencies_injected")
 
     async def run(self, goal: str) -> AsyncIterator[str]:
         """
@@ -144,7 +189,7 @@ class Kernel:
         """
         Respond to user message with streaming output.
 
-        Uses LLM Gateway for response generation.
+        Uses ToolCallerAgent for intelligent tool calling and memory integration.
         """
         logger.info("kernel.chat_start", message_length=len(message))
 
@@ -161,24 +206,63 @@ class Kernel:
                 context = "\n".join([m.content for m in memories[:3]])
                 logger.info("kernel.chat_memories_found", count=len(memories))
 
-            # Build messages
-            messages = [
-                LLMMessage(role="system",
-                    content=f"You are {self.config.agent_name}, a helpful AI assistant."),
-                LLMMessage(role="system",
-                    content=f"Relevant context:\n{context}" if context else ""),
-                LLMMessage(role="user", content=message),
-            ]
+            # Analyze if tools are needed
+            tool_calls = await self.tool_caller.analyze_and_call(message)
 
-            logger.info("kernel.chat_streaming_start")
+            # Execute tool calls if any
+            tool_results = []
+            if tool_calls:
+                yield f"[Analyzing request and determining tools needed...]\n"
+                tool_results = await self.tool_caller.execute_calls(tool_calls)
 
-            # Stream response
-            token_count = 0
-            async for chunk in self.gateway.complete_stream(messages):
-                token_count += 1
-                yield chunk
+                # Report tool results
+                for result in tool_results:
+                    if result.success:
+                        yield f"[Used {result.tool_name}: {str(result.data)[:100]}...]\n"
+                    else:
+                        yield f"[{result.tool_name} failed: {result.error}]\n"
 
-            logger.info("kernel.chat_complete", tokens=token_count)
+            # Generate response
+            yield "[Generating response...]\n"
+
+            # Build context for response generation
+            response_context = f"User message: {message}\n"
+            if context:
+                response_context += f"\nRelevant memories:\n{context}\n"
+
+            if tool_results:
+                response_context += "\nTool results:\n"
+                for result in tool_results:
+                    if result.success:
+                        response_context += f"- {result.tool_name}: {result.data}\n"
+                    else:
+                        response_context += f"- {result.tool_name} (failed): {result.error}\n"
+
+            # Generate response
+            response = await self.tool_caller.generate_response(message, tool_results)
+            yield response
+
+            # Store conversation in episodic memory
+            memory_content = f"User: {message}\n"
+            if tool_calls:
+                memory_content += f"Tools used: {[tc.tool_name for tc in tool_calls]}\n"
+            memory_content += f"Assistant: {response[:200]}..."
+
+            await self.memory.write(
+                content=memory_content,
+                layer=MemoryLayer.EPISODIC,
+                metadata={
+                    "session_id": "chat",
+                    "tool_calls": len(tool_calls),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+
+            logger.info(
+                "kernel.chat_complete",
+                tool_calls=len(tool_calls),
+                memory_written=True
+            )
 
         except Exception as e:
             logger.exception("kernel.chat_error", error=str(e))
