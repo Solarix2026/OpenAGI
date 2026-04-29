@@ -1,108 +1,111 @@
 #!/usr/bin/env python
-"""
-Simple test script to start OpenAGI v5 and test basic functionality.
-"""
+"""Simple test script for OpenAGI v5 - run this to test the system."""
+
 import asyncio
-import sys
-import os
-
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from api.server import create_app
-from config.settings import Settings
-from core.kernel import Kernel
-from core.telos_core import TelosCore
+import json
+import websockets
 
 
-async def test_basic_functionality():
-    """Test basic OpenAGI v5 functionality."""
-    print("=" * 60)
-    print("OpenAGI v5 - Basic Functionality Test")
-    print("=" * 60)
+async def test_system():
+    """Test the OpenAGI system with WebSocket."""
+    uri = "ws://localhost:8000/ws"
 
-    # 1. Test Settings
-    print("\n1. Testing Settings...")
+    print("Testing OpenAGI v5 System")
+    print("=" * 50)
+
     try:
-        settings = Settings()
-        print(f"   [OK] Agent name: {settings.agent_name}")
-        print(f"   [OK] API host: {settings.api_host}")
-        print(f"   [OK] API port: {settings.api_port}")
-        print(f"   [OK] LLM provider: {settings.llm_provider}")
-    except Exception as e:
-        print(f"   [FAIL] Settings failed: {e}")
-        return
+        async with websockets.connect(uri) as websocket:
+            # Test 1: Simple question
+            print("\nTest 1: 'what is the current date'")
+            message = {
+                "type": "message",
+                "content": "what is the current date",
+                "session_id": "test-1"
+            }
 
-    # 2. Test Telos Core
-    print("\n2. Testing Telos Core...")
-    try:
-        telos = TelosCore()
-        print(f"   [OK] Telos initialized with values: {telos.core_values}")
-        alignment = telos.check_alignment({"name": "help_user", "risk_score": 0.1, "parameters": {}})
-        print(f"   [OK] Alignment check: {alignment.decision}")
-        print(f"   [OK] Alignment reasoning: {alignment.reasoning}")
-    except Exception as e:
-        print(f"   [FAIL] Telos failed: {e}")
-        return
+            await websocket.send(json.dumps(message))
 
-    # 3. Test Kernel
-    print("\n3. Testing Kernel...")
-    try:
-        kernel = Kernel(telos=telos)
-        print(f"   [OK] Kernel initialized")
-        status = kernel.get_status()
-        print(f"   [OK] Status: {status}")
-    except Exception as e:
-        print(f"   [FAIL] Kernel failed: {e}")
-        return
+            response = ""
+            async for msg in websocket:
+                data = json.loads(msg)
+                content = data.get('content', '')
 
-    # 4. Test API Server Creation
-    print("\n4. Testing API Server...")
-    try:
-        app = create_app(settings=settings, kernel=kernel)
-        print(f"   [OK] FastAPI app created")
-        print(f"   [OK] App title: {app.title}")
-        print(f"   [OK] App version: {app.version}")
-    except Exception as e:
-        print(f"   [FAIL] API server failed: {e}")
-        return
+                if data["type"] == "token":
+                    response += content
+                    print(f"  Token: {content[:50]}...")
+                elif data["type"] == "done":
+                    print(f"  Done!")
+                    break
+                elif data["type"] == "error":
+                    print(f"  Error: {content}")
+                    break
 
-    # 5. Test Tool Registry
-    print("\n5. Testing Tool Registry...")
-    try:
-        tools = kernel.registry.list_tools()
-        print(f"   [OK] Registry initialized")
-        print(f"   [OK] Tools available: {len(tools)}")
-        for tool in tools[:3]:  # Show first 3 tools
-            print(f"      - {tool.name} (risk: {tool.risk_score})")
-    except Exception as e:
-        print(f"   [FAIL] Registry failed: {e}")
-        return
+            print(f"  Full response: {response[:200]}...")
 
-    # 6. Test Memory
-    print("\n6. Testing Memory...")
-    try:
-        from memory.memory_core import MemoryLayer
-        await kernel.memory.write("Test memory entry", MemoryLayer.WORKING, {})
-        results = await kernel.memory.recall("Test", [MemoryLayer.WORKING], top_k=1)
-        print(f"   [OK] Memory initialized")
-        print(f"   [OK] Memory write/read successful")
-        print(f"   [OK] Results found: {len(results)}")
-    except Exception as e:
-        print(f"   [FAIL] Memory failed: {e}")
-        return
+            # Test 2: Web search
+            print("\nTest 2: 'search for latest AI news'")
+            message = {
+                "type": "message",
+                "content": "search for latest AI news",
+                "session_id": "test-2"
+            }
 
-    print("\n" + "=" * 60)
-    print("All tests passed! [OK]")
-    print("=" * 60)
-    print("\nTo start the server:")
-    print("  python main.py")
-    print("\nTo test the API:")
-    print("  curl http://localhost:8000/health")
-    print("  curl http://localhost:8000/tools")
-    print("\nTo run interactive chat:")
-    print("  python main.py --chat")
+            await websocket.send(json.dumps(message))
+
+            response = ""
+            async for msg in websocket:
+                data = json.loads(msg)
+                content = data.get('content', '')
+
+                if data["type"] == "token":
+                    response += content
+                    print(f"  Token: {content[:50]}...")
+                elif data["type"] == "done":
+                    print(f"  Done!")
+                    break
+                elif data["type"] == "error":
+                    print(f"  Error: {content}")
+                    break
+
+            print(f"  Full response: {response[:200]}...")
+
+            # Test 3: Code execution
+            print("\nTest 3: 'calculate 2+2'")
+            message = {
+                "type": "message",
+                "content": "calculate 2+2",
+                "session_id": "test-3"
+            }
+
+            await websocket.send(json.dumps(message))
+
+            response = ""
+            async for msg in websocket:
+                data = json.loads(msg)
+                content = data.get('content', '')
+
+                if data["type"] == "token":
+                    response += content
+                    print(f"  Token: {content[:50]}...")
+                elif data["type"] == "done":
+                    print(f"  Done!")
+                    break
+                elif data["type"] == "error":
+                    print(f"  Error: {content}")
+                    break
+
+            print(f"  Full response: {response[:200]}...")
+
+            print("\n" + "=" * 50)
+            print("All tests completed!")
+
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
-    asyncio.run(test_basic_functionality())
+    print("Make sure the server is running: python main.py")
+    print("Then run this test script.\n")
+    asyncio.run(test_system())

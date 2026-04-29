@@ -24,7 +24,16 @@
       "Bash(timeout 8 cmd /c \"echo Waiting for comprehensive test...\")",
       "Bash(timeout 5 cmd /c \"echo Waiting for server to start...\")",
       "Bash(timeout 15 cmd /c \"echo Waiting for comprehensive test...\")",
-      "Bash(timeout 8 cmd /c \"echo Waiting for response test...\")"
+      "Bash(timeout 8 cmd /c \"echo Waiting for response test...\")",
+      "Bash(timeout 8 cmd /c \"echo Waiting for test...\")",
+      "Bash(pip list:*)",
+      "Bash(timeout 10 cmd /c \"echo Waiting for ReAct test...\")",
+      "Bash(timeout 8 cmd /c \"echo Waiting for simple test...\")",
+      "Bash(timeout 10 cmd /c \"echo Waiting for full ReAct test...\")",
+      "Bash(timeout 10 cmd /c \"echo Waiting for test...\")",
+      "Bash(timeout 5 bash -c \"while ! curl -s http://localhost:8000/health > /dev/null 2>&1; do sleep 1; done\")",
+      "Bash(findstr LISTENING)",
+      "Bash(timeout 2)"
     ]
   }
 }

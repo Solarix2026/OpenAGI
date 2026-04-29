@@ -141,12 +141,15 @@ def create_app(settings: Optional[Settings] = None, kernel: Optional[Kernel] = N
 
                 # Stream tokens - use chat() for conversational responses
                 try:
+                    import sys
+                    print(f"[DEBUG] Starting stream for session: {session_id}", flush=True)
                     logger.info("ws.starting_stream", session_id=session_id)
                     token_count = 0
                     async for token in k.chat(content):
                         token_count += 1
                         await ws.send_json({"type": "token", "content": token})
                     await ws.send_json({"type": "done"})
+                    print(f"[DEBUG] Stream complete with {token_count} tokens", flush=True)
                     logger.info("ws.stream_complete", tokens=token_count)
                 except Exception as e:
                     logger.exception("ws.stream_error", error=str(e))

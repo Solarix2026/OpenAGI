@@ -122,6 +122,29 @@ class CodeTool(BaseTool):
     ) -> CodeResult:
         max_att = max_attempts or self.max_attempts
         current_code = code
+
+        # Auto-wrap expressions in print() if they don't produce output
+        lines = current_code.strip().split('\n')
+        has_print = any('print(' in line for line in lines)
+        has_assignment = any('=' in line and not line.strip().startswith('#') for line in lines)
+
+        # If no print, no assignment, and last line looks like an expression
+        if not has_print and not has_assignment and len(lines) > 0:
+            last_line = lines[-1].strip()
+            # Check if last line looks like an expression (not a statement)
+            # Expressions typically have function calls, literals, or variable access
+            if (last_line and
+                not last_line.startswith(('import ', 'from ', 'def ', 'class ', 'return ', 'yield ', 'if ', 'for ', 'while ', 'with ')) and
+                not last_line.endswith(':') and
+                ('(' in last_line or  # function call
+                 last_line.replace('.', '').replace('_', '').replace('-', '').isalnum() or  # simple identifier
+                 last_line[0] in ['"', "'"] or  # string literal
+                 last_line[0].isdigit() or  # number literal
+                 last_line in ['True', 'False', 'None'])):  # constants
+                # Wrap the last line in print()
+                lines[-1] = f"print({last_line})"
+                current_code = '\n'.join(lines)
+
         repair_history: list[RepairAttempt] = []
         start = time.time()
 

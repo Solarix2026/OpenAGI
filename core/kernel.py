@@ -18,6 +18,7 @@ from typing import Any, AsyncIterator, Optional
 import structlog
 
 from config.settings import get_settings
+from core.react_loop import ReActLoop
 from core.telos_core import TelosCore, AlignmentResult, TelosAction
 from agents.planner import Planner, TaskGraph, TaskStatus
 from agents.executor import Executor
@@ -70,6 +71,9 @@ class Kernel:
         self.reflector = reflector or Reflector(self.memory, telos)
         self.gateway = gateway or LLMGateway()
         self.tool_caller = ToolCallerAgent(self.registry, self.gateway)
+
+        # Initialize ReAct loop for iterative reasoning
+        self.react_loop = ReActLoop(self.tool_caller, self.registry, self.gateway)
 
         # Auto-load builtin tools
         from pathlib import Path
@@ -185,16 +189,30 @@ class Kernel:
         yield f"\nCompleted in {summary.get('total_time_ms', 0):.0f}ms\n"
         yield f"Success rate: {summary.get('success_rate', 0)*100:.0f}%\n"
 
-    async def chat(self, message: str) -> AsyncIterator[str]:
+    async def chat(self, message: str, max_turns: int = 5) -> AsyncIterator[str]:
         """
-        Respond to user message with streaming output.
+        Respond to user message with ReAct (Reason + Act) loop.
 
-        Uses ToolCallerAgent for intelligent tool calling and memory integration.
+        Uses iterative reasoning: Thought → Action → Observation → Thought → ...
         """
+        import sys
+        print(f"[DEBUG] kernel.chat() called with message: {message[:50]}...", flush=True)
         logger.info("kernel.chat_start", message_length=len(message))
 
         try:
-            # Query memories
+            # Priority 2: Telos alignment check
+            alignment = self.telos.check_alignment({
+                "name": "chat_response",
+                "action_text": message,
+                "risk_score": self.telos.drift_score(message)
+            })
+
+            if alignment.decision == TelosAction.BLOCK:
+                yield "Request blocked by value alignment system.\n"
+                yield f"Reason: {alignment.reasoning}\n"
+                return
+
+            # Query memories for context
             memories = await self.memory.recall(
                 query=message,
                 layers=[MemoryLayer.EPISODIC, MemoryLayer.WORKING],
@@ -206,67 +224,91 @@ class Kernel:
                 context = "\n".join([m.content for m in memories[:3]])
                 logger.info("kernel.chat_memories_found", count=len(memories))
 
-            # Analyze if tools are needed
-            tool_calls = await self.tool_caller.analyze_and_call(message)
+            # Priority 1: ReAct loop
+            history = [{"role": "user", "content": message}]
+            observations = []
 
-            # Execute tool calls if any
-            tool_results = []
-            if tool_calls:
-                yield f"[Analyzing request and determining tools needed...]\n"
-                tool_results = await self.tool_caller.execute_calls(tool_calls)
+            for turn in range(max_turns):
+                # Reason
+                print(f"[DEBUG] Turn {turn}: Starting reasoning...", flush=True)
+                thought = await self.react_loop.reason(history, observations)
 
-                # Report tool results
-                for result in tool_results:
-                    if result.success:
-                        yield f"[Used {result.tool_name}: {str(result.data)[:100]}...]\n"
-                    else:
-                        yield f"[{result.tool_name} failed: {result.error}]\n"
+                print(f"[DEBUG] Turn {turn}: Reasoning complete", flush=True)
+                print(f"[DEBUG] Thought status: {thought.status.value}", flush=True)
+                print(f"[DEBUG] Thought reasoning: {thought.reasoning[:100] if thought.reasoning else 'None'}", flush=True)
+                print(f"[DEBUG] Thought tool: {thought.tool or 'None'}", flush=True)
+                print(f"[DEBUG] Thought params: {thought.params or 'None'}", flush=True)
+                print(f"[DEBUG] Thought response: {thought.response[:100] if thought.response else 'None'}", flush=True)
+                print(f"[DEBUG] Is final: {thought.is_final()}", flush=True)
+                print(f"[DEBUG] Needs action: {thought.needs_action()}", flush=True)
 
-            # Generate response
-            yield "[Generating response...]\n"
+                logger.info("kernel.react_thought",
+                           turn=turn,
+                           status=thought.status.value,
+                           has_tool=thought.tool is not None,
+                           has_response=thought.response is not None,
+                           reasoning=thought.reasoning[:100] if thought.reasoning else "",
+                           tool_name=thought.tool or "",
+                           is_final=thought.is_final(),
+                           needs_action=thought.needs_action())
 
-            # Build context for response generation
-            response_context = f"User message: {message}\n"
-            if context:
-                response_context += f"\nRelevant memories:\n{context}\n"
+                if thought.is_final():  # Fixed: Call the method
+                    # Ready to respond
+                    print(f"[DEBUG] Returning final response: {thought.response[:100] if thought.response else 'None'}", flush=True)
+                    logger.info("kernel.chat_final_response", response=thought.response[:100] if thought.response else "")
+                    yield thought.response or "I'm ready to help you."
+                    break
 
-            if tool_results:
-                response_context += "\nTool results:\n"
-                for result in tool_results:
-                    if result.success:
-                        response_context += f"- {result.tool_name}: {result.data}\n"
-                    else:
-                        response_context += f"- {result.tool_name} (failed): {result.error}\n"
+                if thought.needs_action():
+                    # Show thinking
+                    if thought.reasoning:
+                        yield f"[Thinking: {thought.reasoning}]\n"
 
-            # Generate response
-            response = await self.tool_caller.generate_response(message, tool_results)
-            yield response
+                    # Act
+                    print(f"[DEBUG] Executing action: {thought.tool}", flush=True)
+                    observation = await self.react_loop.act(thought)
+                    observations.append(observation)
+
+                    # Show result
+                    yield f"[Result: {observation[:150]}]\n"
+
+                    # Add to history
+                    history.append({
+                        "role": "assistant",
+                        "content": f"Used {thought.tool}: {observation}"
+                    })
+
+                    logger.info("kernel.chat_action_completed",
+                               turn=turn,
+                               tool=thought.tool,
+                               observation_length=len(observation))
+
+                else:
+                    # No action needed, respond
+                    print(f"[DEBUG] No action and no final - returning default", flush=True)
+                    logger.warning("kernel.chat_no_action_no_final",
+                                  reasoning=thought.reasoning[:100] if thought.reasoning else "",
+                                  response=thought.response[:100] if thought.response else "")
+                    yield thought.response or "I'm not sure what to do next."
+                    break
 
             # Store conversation in episodic memory
             memory_content = f"User: {message}\n"
-            if tool_calls:
-                memory_content += f"Tools used: {[tc.tool_name for tc in tool_calls]}\n"
-            memory_content += f"Assistant: {response[:200]}..."
+            if observations:
+                memory_content += f"Observations: {len(observations)} tool calls\n"
+            memory_content += f"Assistant: [ReAct loop completed]"
 
             await self.memory.write(
                 content=memory_content,
                 layer=MemoryLayer.EPISODIC,
-                metadata={
-                    "session_id": "chat",
-                    "tool_calls": len(tool_calls),
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                metadata={"turns": len(observations)}
             )
 
-            logger.info(
-                "kernel.chat_complete",
-                tool_calls=len(tool_calls),
-                memory_written=True
-            )
+            logger.info("kernel.chat_complete", turns=len(observations))
 
         except Exception as e:
             logger.exception("kernel.chat_error", error=str(e))
-            yield f"\n[Error: {str(e)}]"
+            yield f"Error: {str(e)}\n"
 
     def get_status(self) -> dict[str, Any]:
         """Get kernel status."""

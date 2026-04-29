@@ -67,7 +67,7 @@ class WebSearchTool(BaseTool):
             )
 
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
 
             results = []
             with DDGS() as ddgs:
@@ -91,7 +91,7 @@ class WebSearchTool(BaseTool):
             return ToolResult(
                 success=False,
                 tool_name=self.meta.name,
-                error="duckduckgo-search package not installed. Install with: pip install duckduckgo-search"
+                error="ddgs package not installed. Install with: pip install ddgs"
             )
         except Exception as e:
             logger.exception("web_search.tool.error", query=query, error=str(e))

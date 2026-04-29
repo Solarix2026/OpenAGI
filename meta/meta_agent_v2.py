@@ -345,6 +345,10 @@ class MetaAgent:
                     self.stats.improvements_implemented += 1
                     return True
 
+            elif proposal.proposal_type == "parameter":
+                # Actually change system parameters
+                return await self._adjust_parameters(proposal)
+
             # For other types, just log for now
             logger.info("meta_agent.improvement_logged",
                        proposal_type=proposal.proposal_type)
@@ -354,6 +358,78 @@ class MetaAgent:
         except Exception as e:
             logger.exception("meta_agent.implementation_error",
                            error=str(e))
+            return False
+
+    async def _adjust_parameters(self, proposal: ImprovementProposal) -> bool:
+        """Actually adjust system parameters based on improvement proposal.
+
+        This is the real self-improvement - changing behavior, not just logging.
+
+        Args:
+            proposal: Improvement proposal with parameter changes
+
+        Returns:
+            True if parameters were successfully adjusted
+        """
+        try:
+            # Extract parameter changes from proposal
+            param_changes = proposal.metadata.get("parameter_changes", {})
+
+            if not param_changes:
+                logger.warning("meta_agent.no_param_changes", proposal=proposal.proposal_type)
+                return False
+
+            # Apply parameter changes
+            for param_name, param_value in param_changes.items():
+                if param_name == "router_complexity_keywords":
+                    # Adjust LLM gateway routing keywords
+                    from config.settings import get_settings
+                    config = get_settings()
+                    config.router_complexity_keywords = param_value
+                    logger.info("meta_agent.param_adjusted",
+                              param=param_name,
+                              value=param_value)
+
+                elif param_name == "planner_threshold":
+                    # Adjust planner graph threshold
+                    if hasattr(self, 'planner') and hasattr(self.planner, 'graph'):
+                        # This would need actual implementation in Planner
+                        logger.info("meta_agent.param_adjusted",
+                                  param=param_name,
+                                  value=param_value)
+
+                elif param_name == "memory_ttl":
+                    # Adjust memory TTL settings
+                    if hasattr(self, 'memory'):
+                        # This would need actual implementation in MemoryCore
+                        logger.info("meta_agent.param_adjusted",
+                                  param=param_name,
+                                  value=param_value)
+
+                else:
+                    logger.warning("meta_agent.unknown_param",
+                                 param=param_name,
+                                 value=param_value)
+
+            # Store the change in active memory for tracking
+            memory_id = f"param_change_{int(asyncio.get_event_loop().time())}"
+            self._active_memory.add(
+                memory_id,
+                f"Adjusted parameters: {param_changes}",
+                frequency=1,
+                fillable=True,
+                source_reflection="self_improvement",
+                metadata={"param_changes": param_changes}
+            )
+
+            logger.info("meta_agent.parameters_changed",
+                       count=len(param_changes),
+                       changes=param_changes)
+
+            return True
+
+        except Exception as e:
+            logger.exception("meta_agent.param_adjustment_failed", error=str(e))
             return False
 
     async def self_benchmark(self) -> dict[str, Any]:

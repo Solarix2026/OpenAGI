@@ -185,12 +185,17 @@ If no tools are needed, set needs_tools to false and empty tool_calls array."""
                     tool_context += f"- {result.tool_name} (failed): {result.error}\n"
 
         # Build response prompt
-        prompt = f"""Generate a helpful response to the user message, incorporating the tool results.
+        prompt = f"""Provide a direct, concise response to the user's question using the tool results.
 
 User message: {message}
 {tool_context}
 
-Provide a clear, helpful response that directly addresses the user's request."""
+Guidelines:
+- Be direct and concise
+- Answer the question directly
+- Don't over-explain unless asked
+- Use natural, conversational tone
+- If tool results contain the answer, use it directly"""
 
         try:
             response = await self.gateway.complete(
