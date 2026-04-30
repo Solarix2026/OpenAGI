@@ -212,6 +212,17 @@ class Kernel:
                 yield f"Reason: {alignment.reasoning}\n"
                 return
 
+            # For tool execution, also check Telos alignment
+            # This replaces hardcoded security rules with intelligent alignment
+            async def check_tool_alignment(tool_name: str, params: dict) -> bool:
+                """Check if tool execution aligns with Telos values."""
+                tool_alignment = self.telos.check_alignment({
+                    "name": f"tool_execution_{tool_name}",
+                    "action_text": f"Execute {tool_name} with params: {params}",
+                    "risk_score": 0.3  # Default risk for tool execution
+                })
+                return tool_alignment.decision != TelosAction.BLOCK
+
             # Query memories for context
             memories = await self.memory.recall(
                 query=message,
@@ -260,6 +271,19 @@ class Kernel:
                     break
 
                 if thought.needs_action():
+                    # Check Telos alignment before executing tool
+                    # This replaces hardcoded security rules with intelligent alignment
+                    tool_alignment = self.telos.check_alignment({
+                        "name": f"tool_execution_{thought.tool}",
+                        "action_text": f"Execute {thought.tool}",
+                        "risk_score": 0.3  # Default risk for tool execution
+                    })
+
+                    if tool_alignment.decision == TelosAction.BLOCK:
+                        yield f"[Tool {thought.tool} blocked by value alignment]\n"
+                        # Let the system try another approach
+                        continue
+
                     # Show thinking
                     if thought.reasoning:
                         yield f"[Thinking: {thought.reasoning}]\n"

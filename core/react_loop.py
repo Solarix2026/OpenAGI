@@ -117,7 +117,11 @@ If you're ready to respond to the user:
 THOUGHT: [your reasoning about the final answer]
 FINAL: [your response to the user]
 
-Be concise and direct. Think carefully about whether you need more information or can answer now."""
+IMPORTANT RULES:
+- For the 'code' tool: ALWAYS use print() to output results. Example: print(2+2) not 2+2
+- For the 'code' tool: If you need imports, put them first, then print() the result
+- For the 'shell' tool: Use commands that produce output to stdout
+- Be concise and direct. Think carefully about whether you need more information or can answer now."""
 
         return prompt
 

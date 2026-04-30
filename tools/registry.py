@@ -160,6 +160,7 @@ class ToolRegistry:
         Invoke a tool by name with parameters.
 
         This is the ONLY way to call tools from the kernel.
+        Automatically converts parameter types based on tool schema.
         """
         tool = self.get(tool_name)
 
@@ -171,8 +172,11 @@ class ToolRegistry:
                 error=f"Tool '{tool_name}' not found in registry",
             )
 
+        # Convert parameter types (LLMs often pass strings)
+        converted_params = tool.convert_params(params)
+
         # Validate params
-        valid, error_msg = tool.validate_params(params)
+        valid, error_msg = tool.validate_params(converted_params)
         if not valid:
             return ToolResult(
                 success=False,
@@ -181,7 +185,7 @@ class ToolRegistry:
             )
 
         try:
-            result = await tool.execute(**params)
+            result = await tool.execute(**converted_params)
             logger.info(
                 "tool.invoked",
                 name=tool_name,

@@ -10,6 +10,60 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, AsyncIterator, Literal
+import structlog
+
+logger = structlog.get_logger()
+
+
+def convert_param_type(value: Any, param_type: str) -> Any:
+    """Convert parameter value to the correct type.
+
+    LLMs often pass parameters as strings when they should be other types.
+    This function handles automatic type conversion.
+
+    Args:
+        value: The value to convert
+        param_type: The target type ('string', 'integer', 'boolean', 'number')
+
+    Returns:
+        Converted value
+    """
+    if value is None:
+        return None
+
+    # If already the right type, return as-is
+    if param_type == "string" and isinstance(value, str):
+        return value
+    if param_type == "integer" and isinstance(value, int):
+        return value
+    if param_type == "boolean" and isinstance(value, bool):
+        return value
+    if param_type == "number" and isinstance(value, (int, float)):
+        return value
+
+    # Convert to target type
+    try:
+        if param_type == "string":
+            return str(value)
+        elif param_type == "integer":
+            if isinstance(value, str):
+                return int(value.strip())
+            return int(value)
+        elif param_type == "boolean":
+            if isinstance(value, str):
+                return value.lower() in ('true', '1', 'yes', 'on')
+            return bool(value)
+        elif param_type == "number":
+            if isinstance(value, str):
+                return float(value.strip())
+            return float(value)
+    except (ValueError, TypeError):
+        logger.warning("param_conversion_failed",
+                      value=value,
+                      target_type=param_type)
+        return value  # Return original if conversion fails
+
+    return value
 
 
 @dataclass(frozen=True)
@@ -106,6 +160,27 @@ class BaseTool(ABC):
             return False, f"Missing required parameters: {missing}"
 
         return True, ""
+
+    def convert_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Convert parameters to correct types based on schema.
+
+        LLMs often pass parameters as strings. This function automatically
+        converts them to the correct types based on the tool's parameter schema.
+        """
+        schema = self.meta.parameters
+        properties = schema.get("properties", {})
+        converted = {}
+
+        for key, value in params.items():
+            if key in properties:
+                param_spec = properties[key]
+                param_type = param_spec.get("type", "string")
+                converted[key] = convert_param_type(value, param_type)
+            else:
+                # Keep unknown parameters as-is
+                converted[key] = value
+
+        return converted
 
 
 class ToolError(Exception):

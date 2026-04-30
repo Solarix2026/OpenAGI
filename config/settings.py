@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # NVIDIA NIM (Primary)
     nvidia_nim_api_key: SecretStr = Field(default=SecretStr(""))
     nvidia_nim_base_url: HttpUrl = Field(default=HttpUrl("https://integrate.api.nvidia.com"))
-    nvidia_nim_model: str = Field(default="meta/llama-3.1-70b-instruct")
+    nvidia_nim_model: str = Field(default="moonshotai/kimi-k2-instruct-0905")
     nvidia_nim_temperature: float = Field(default=0.2)
     nvidia_nim_max_tokens: int = Field(default=4096)
 
